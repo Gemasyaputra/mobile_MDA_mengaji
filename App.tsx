@@ -5,12 +5,14 @@ import { StatusBar } from 'expo-status-bar';
 
 // Mengimpor layar-layar kita
 import DevLoginScreen from './src/screens/DevLoginScreen';
-import ParentDashboard from './src/screens/ParentDashboard';
+import ParentTabs from './src/navigation/ParentTabs';
 import TeacherHome from './src/screens/TeacherHome';
 import TeacherAttendanceScreen from './src/screens/TeacherAttendanceScreen';
 import TeacherInputNgajiScreen from './src/screens/TeacherInputNgajiScreen';
 import TeacherInputHafalanScreen from './src/screens/TeacherInputHafalanScreen';
 import ParentQRLoginScreen from './src/screens/ParentQRLoginScreen';
+import ParentHistoryScreen from './src/screens/ParentHistoryScreen';
+import ParentKabarDetailScreen from './src/screens/ParentKabarDetailScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -24,10 +26,10 @@ export default function App() {
           component={DevLoginScreen} 
           options={{ headerShown: false }}
         />
-        <Stack.Screen 
-          name="ParentDashboard" 
-          component={ParentDashboard} 
-          options={{ headerShown: false }} 
+        <Stack.Screen
+          name="ParentTabs"
+          component={ParentTabs}
+          options={{ headerShown: false }}
         />
         <Stack.Screen 
           name="TeacherHome" 
@@ -49,10 +51,20 @@ export default function App() {
           component={TeacherInputHafalanScreen} 
           options={{ headerShown: false }} 
         />
-        <Stack.Screen 
-          name="ParentQRLogin" 
-          component={ParentQRLoginScreen} 
-          options={{ headerShown: false }} 
+        <Stack.Screen
+          name="ParentQRLogin"
+          component={ParentQRLoginScreen}
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen
+          name="ParentHistory"
+          component={ParentHistoryScreen}
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen
+          name="ParentKabarDetail"
+          component={ParentKabarDetailScreen}
+          options={{ headerShown: false }}
         />
       </Stack.Navigator>
     </NavigationContainer>

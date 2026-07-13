@@ -47,7 +47,7 @@ export default function ParentQRLoginScreen({ navigation }: any) {
       
       if (response.data.success) {
         await AsyncStorage.setItem('parent_student_slug', scannedSlug);
-        navigation.replace('ParentDashboard', { slug: scannedSlug });
+        navigation.replace('ParentTabs', { slug: scannedSlug });
       }
     } catch (error: any) {
       console.error(error);

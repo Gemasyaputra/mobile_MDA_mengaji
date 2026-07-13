@@ -17,7 +17,7 @@ export default function DevLoginScreen({ navigation }: any) {
     try {
       const savedSlug = await AsyncStorage.getItem('parent_student_slug');
       if (savedSlug) {
-        navigation.replace('ParentDashboard', { slug: savedSlug });
+        navigation.replace('ParentTabs', { slug: savedSlug });
         return; 
       }
       
