@@ -2,11 +2,15 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, StatusBar, ActivityIndicator, Alert, RefreshControl } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
-import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Feather, MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_URL } from '../config/api';
+import { ActivityItem, ICON_CONFIG, buildTeacherMessage, formatRelativeTime } from '../utils/activityFeed';
+import { handleTeacherAuthError } from '../utils/authError';
+
+const LOCATION_CACHE_KEY = 'cached_teacher_location';
 
 export default function TeacherHome({ navigation }: any) {
   const insets = useSafeAreaInsets();
@@ -18,14 +22,16 @@ export default function TeacherHome({ navigation }: any) {
     totalClasses: 0,
     totalStudents: 0,
     presentToday: 0,
-    recentActivities: []
   });
 
   const [teacherId, setTeacherId] = useState<number | null>(null);
+  const [activities, setActivities] = useState<ActivityItem[]>([]);
+  const [activitiesLoading, setActivitiesLoading] = useState(true);
 
   // For Real-time Clock
   const [currentTime, setCurrentTime] = useState(new Date());
   const [locationName, setLocationName] = useState('📍 Memuat lokasi...');
+  const [locationRefreshing, setLocationRefreshing] = useState(false);
   const [prayerTimes, setPrayerTimes] = useState([
     { name: 'SUBUH', time: '--:--' },
     { name: 'DZUHUR', time: '--:--' },
@@ -40,45 +46,71 @@ export default function TeacherHome({ navigation }: any) {
     }, [])
   );
 
+  const fetchPrayerTimes = async (latitude: number, longitude: number) => {
+    const unixTime = Math.floor(new Date().getTime() / 1000);
+    const res = await axios.get(`https://api.aladhan.com/v1/timings/${unixTime}?latitude=${latitude}&longitude=${longitude}&method=11`);
+    if (res.data && res.data.code === 200) {
+      const t = res.data.data.timings;
+      setPrayerTimes([
+        { name: 'SUBUH', time: t.Fajr },
+        { name: 'DZUHUR', time: t.Dhuhr },
+        { name: 'ASHR', time: t.Asr },
+        { name: 'MAGHRIB', time: t.Maghrib },
+        { name: 'ISYA', time: t.Isha },
+      ]);
+    }
+  };
+
+  const detectLocation = async () => {
+    setLocationRefreshing(true);
+    try {
+      let { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        setLocationName('📍 Lokasi ditolak (Default)');
+        return;
+      }
+
+      const loc = await Location.getCurrentPositionAsync({});
+      const { latitude, longitude } = loc.coords;
+
+      const geocode = await Location.reverseGeocodeAsync({ latitude, longitude });
+      const resolvedName = geocode && geocode.length > 0
+        ? (geocode[0].city || geocode[0].subregion || 'Lokasi Anda')
+        : 'Lokasi Anda';
+
+      setLocationName(`📍 ${resolvedName}`);
+      await fetchPrayerTimes(latitude, longitude);
+
+      await AsyncStorage.setItem(
+        LOCATION_CACHE_KEY,
+        JSON.stringify({ latitude, longitude, name: resolvedName })
+      );
+    } catch (e) {
+      console.log('Error getting location/prayer', e);
+      setLocationName('📍 Gagal memuat lokasi');
+    } finally {
+      setLocationRefreshing(false);
+    }
+  };
+
   useEffect(() => {
-    const fetchPrayerData = async () => {
+    const loadLocation = async () => {
       try {
-        let { status } = await Location.requestForegroundPermissionsAsync();
-        if (status !== 'granted') {
-          setLocationName('📍 Lokasi ditolak (Default)');
-          return;
-        }
-
-        let loc = await Location.getCurrentPositionAsync({});
-        let { latitude, longitude } = loc.coords;
-        
-        let geocode = await Location.reverseGeocodeAsync({ latitude, longitude });
-        if (geocode && geocode.length > 0) {
-          setLocationName(`📍 ${geocode[0].city || geocode[0].subregion || 'Lokasi Anda'}`);
+        const cached = await AsyncStorage.getItem(LOCATION_CACHE_KEY);
+        if (cached) {
+          const { latitude, longitude, name } = JSON.parse(cached);
+          setLocationName(`📍 ${name}`);
+          await fetchPrayerTimes(latitude, longitude);
         } else {
-          setLocationName('📍 Lokasi Anda');
-        }
-
-        const unixTime = Math.floor(new Date().getTime() / 1000);
-        const res = await axios.get(`https://api.aladhan.com/v1/timings/${unixTime}?latitude=${latitude}&longitude=${longitude}&method=11`);
-        
-        if (res.data && res.data.code === 200) {
-          const t = res.data.data.timings;
-          setPrayerTimes([
-            { name: 'SUBUH', time: t.Fajr },
-            { name: 'DZUHUR', time: t.Dhuhr },
-            { name: 'ASHR', time: t.Asr },
-            { name: 'MAGHRIB', time: t.Maghrib },
-            { name: 'ISYA', time: t.Isha },
-          ]);
+          await detectLocation();
         }
       } catch (e) {
-        console.log('Error getting location/prayer', e);
-        setLocationName('📍 Gagal memuat lokasi');
+        console.log('Error loading cached location', e);
+        await detectLocation();
       }
     };
-    
-    fetchPrayerData();
+
+    loadLocation();
 
     const timer = setInterval(() => {
       setCurrentTime(new Date());
@@ -90,21 +122,34 @@ export default function TeacherHome({ navigation }: any) {
     try {
       const token = await AsyncStorage.getItem('teacher_token');
       if (token) {
-        // Parse base64 token
-        // Expo doesn't have built-in atob, but we can do a simple parse or pass it to API
-        // For prototype, our token is Buffer.from(JSON.stringify).toString('base64')
-        // Wait, React Native btoa/atob is not natively available unless polyfilled.
-        // Let's just fetch dashboard with token instead, but wait, the API expects teacherId.
-        // Let's modify the API to accept the token, or polyfill atob.
-        // Actually, we can just assume teacherId is 1 for the prototype if decoding fails, but let's try.
-        // Let's just pass the token to the API and let the backend decode it!
         fetchDashboardData(token);
+        fetchTeacherIdAndActivities(token);
       } else {
         setLoading(false);
       }
     } catch (e) {
        console.log('Error loading token', e);
        setLoading(false);
+    }
+  };
+
+  const fetchTeacherIdAndActivities = async (token: string) => {
+    try {
+      setActivitiesLoading(true);
+      const meRes = await axios.get(`${API_URL}/api/mobile/teacher/me?token=${encodeURIComponent(token)}`);
+      if (meRes.data.success) {
+        const id = meRes.data.data.id;
+        setTeacherId(id);
+        const actRes = await axios.get(`${API_URL}/api/dashboard/activity?role=teacher&teacher_id=${id}&limit=3`);
+        if (actRes.data.success) {
+          setActivities(actRes.data.data || []);
+        }
+      }
+    } catch (err) {
+      const handled = await handleTeacherAuthError(err, navigation);
+      if (!handled) console.log('Error fetching activities', err);
+    } finally {
+      setActivitiesLoading(false);
     }
   };
 
@@ -117,14 +162,13 @@ export default function TeacherHome({ navigation }: any) {
   const fetchDashboardData = async (token: string) => {
     try {
       setLoading(true);
-      // We send the token instead of hardcoded teacherId
       const res = await axios.get(`${API_URL}/api/mobile/teacher/dashboard?token=${encodeURIComponent(token)}`);
       if (res.data.success) {
         setData(res.data.data);
       }
     } catch (err) {
-      console.log('Error fetching dashboard', err);
-      // Alert.alert('Error', 'Gagal memuat data dashboard');
+      const handled = await handleTeacherAuthError(err, navigation);
+      if (!handled) console.log('Error fetching dashboard', err);
     } finally {
       setLoading(false);
     }
@@ -166,7 +210,21 @@ export default function TeacherHome({ navigation }: any) {
                 <Text style={styles.dateText}>
                   {currentTime.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
                 </Text>
-                <Text style={styles.locationText}>{locationName}</Text>
+                <View style={styles.locationRow}>
+                  <Text style={styles.locationText}>{locationName}</Text>
+                  <TouchableOpacity
+                    onPress={detectLocation}
+                    disabled={locationRefreshing}
+                    style={styles.locationRefreshButton}
+                    hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                  >
+                    {locationRefreshing ? (
+                      <ActivityIndicator size="small" color="#A7F3D0" />
+                    ) : (
+                      <Feather name="refresh-cw" size={12} color="#A7F3D0" />
+                    )}
+                  </TouchableOpacity>
+                </View>
               </View>
               <View style={{ alignItems: 'flex-end' }}>
                 <Text style={styles.countdownText}>
@@ -230,7 +288,10 @@ export default function TeacherHome({ navigation }: any) {
           </View>
           
           <View style={styles.quickAccessGrid}>
-            <TouchableOpacity style={[styles.quickCard, { backgroundColor: '#F0FDF4', borderColor: '#DCFCE7' }]}>
+            <TouchableOpacity
+              style={[styles.quickCard, { backgroundColor: '#F0FDF4', borderColor: '#DCFCE7' }]}
+              onPress={() => navigation.navigate('TeacherSantriList')}
+            >
               <Feather name="users" size={24} color="#16A34A" />
               <Text style={[styles.quickCardText, { color: '#16A34A' }]}>Santri</Text>
             </TouchableOpacity>
@@ -274,25 +335,36 @@ export default function TeacherHome({ navigation }: any) {
           </View>
 
           <View style={styles.activityList}>
-            {loading ? (
+            {activitiesLoading ? (
               <ActivityIndicator color="#3B82F6" style={{ marginVertical: 20 }}/>
-            ) : data.recentActivities.length > 0 ? (
-              data.recentActivities.map((act: any) => (
-                <View key={act.id} style={styles.activityItem}>
-                  <View style={[styles.activityIcon, { backgroundColor: '#EFF6FF' }]}>
-                    <Feather name={act.icon} size={16} color="#3B82F6" />
+            ) : activities.length > 0 ? (
+              activities.map((act, idx) => {
+                const config = ICON_CONFIG[act.type] || ICON_CONFIG.attendance;
+                const segments = buildTeacherMessage(act);
+                return (
+                  <View key={idx} style={styles.activityItem}>
+                    <View style={[styles.activityIcon, { backgroundColor: config.bg }]}>
+                      <Ionicons name={config.icon as any} size={16} color={config.color} />
+                    </View>
+                    <View style={styles.activityContent}>
+                      <Text style={styles.activityText}>
+                        {segments.map((seg, si) => (
+                          <Text key={si} style={seg.bold ? styles.bold : undefined}>{seg.text}</Text>
+                        ))}
+                      </Text>
+                      <Text style={styles.activityTime}>• {formatRelativeTime(act.ts)}</Text>
+                    </View>
                   </View>
-                  <View style={styles.activityContent}>
-                    <Text style={styles.activityText}>{act.text}</Text>
-                    <Text style={styles.activityTime}>• {act.time}</Text>
-                  </View>
-                </View>
-              ))
+                );
+              })
             ) : (
                <Text style={{ textAlign: 'center', color: '#94A3B8', padding: 20 }}>Belum ada aktivitas.</Text>
             )}
 
-            <TouchableOpacity style={styles.viewAllButton}>
+            <TouchableOpacity
+              style={styles.viewAllButton}
+              onPress={() => teacherId && navigation.navigate('TeacherActivityLog', { teacherId })}
+            >
               <Text style={styles.viewAllText}>Lihat Semua Aktivitas</Text>
               <Feather name="arrow-right" size={16} color="#3B82F6" />
             </TouchableOpacity>
@@ -310,17 +382,17 @@ export default function TeacherHome({ navigation }: any) {
           <Text style={styles.navTextActive}>Home</Text>
         </TouchableOpacity>
         
-        <TouchableOpacity style={styles.navItem}>
+        <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate('TeacherSantriList')}>
           <Feather name="users" size={20} color="#64748B" />
           <Text style={styles.navText}>Santri</Text>
         </TouchableOpacity>
-        
+
         <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate('TeacherAttendance')}>
           <Feather name="bar-chart-2" size={20} color="#64748B" />
           <Text style={styles.navText}>Presensi</Text>
         </TouchableOpacity>
-        
-        <TouchableOpacity style={styles.navItem}>
+
+        <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate('TeacherKabar')}>
           <Feather name="message-square" size={20} color="#64748B" />
           <Text style={styles.navText}>Kabar</Text>
         </TouchableOpacity>
@@ -427,10 +499,23 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     marginTop: 2,
   },
+  locationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 2,
+  },
   locationText: {
     color: '#A7F3D0',
     fontSize: 11,
-    marginTop: 2,
+  },
+  locationRefreshButton: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   menujuText: {
     color: '#D1FAE5',

@@ -1,17 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, StatusBar, ActivityIndicator, Alert, TextInput, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, StatusBar, ActivityIndicator, Alert, TextInput, Platform, Modal, FlatList } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_URL } from '../config/api';
+import { handleTeacherAuthError } from '../utils/authError';
 
 export default function TeacherInputHafalanScreen({ navigation }: any) {
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [teacherToken, setTeacherToken] = useState<string | null>(null);
-  
+  const [teacherId, setTeacherId] = useState<number | null>(null);
+
   const [classes, setClasses] = useState<any[]>([]);
   const [selectedClass, setSelectedClass] = useState<any>(null);
   const [students, setStudents] = useState<any[]>([]);
@@ -30,6 +32,7 @@ export default function TeacherInputHafalanScreen({ navigation }: any) {
   const [isCompleted, setIsCompleted] = useState(false);
   const [quality, setQuality] = useState('A');
   const [notes, setNotes] = useState('');
+  const [showItemPicker, setShowItemPicker] = useState(false);
 
   useEffect(() => {
     loadInitialData();
@@ -42,8 +45,16 @@ export default function TeacherInputHafalanScreen({ navigation }: any) {
       if (token) {
         setTeacherToken(token);
         fetchClasses(token);
+        try {
+          const meRes = await axios.get(`${API_URL}/api/mobile/teacher/me?token=${encodeURIComponent(token)}`);
+          if (meRes.data.success) {
+            setTeacherId(meRes.data.data.id);
+          }
+        } catch (e) {
+          console.log('Error resolving teacher id', e);
+        }
       }
-      
+
       // Fetch Master Data
       const dpRes = await axios.get(`${API_URL}/api/master/daily-prayers`);
       if (dpRes.data.success) {
@@ -67,7 +78,8 @@ export default function TeacherInputHafalanScreen({ navigation }: any) {
         setClasses(res.data.data);
       }
     } catch (err) {
-      console.log('Error fetching classes', err);
+      const handled = await handleTeacherAuthError(err, navigation);
+      if (!handled) console.log('Error fetching classes', err);
     }
   };
 
@@ -128,16 +140,16 @@ export default function TeacherInputHafalanScreen({ navigation }: any) {
       Alert.alert('Peringatan', 'Silakan pilih Doa/Bacaan terlebih dahulu.');
       return;
     }
+    if (!teacherId) {
+      Alert.alert('Error', 'Sesi guru tidak valid. Silakan login ulang.');
+      return;
+    }
 
     setSaving(true);
     try {
-      const safeToken = String(teacherToken || '');
-      const payloadBase64 = safeToken.includes('.') ? safeToken.split('.')[1] : safeToken;
-      const decodedPayload = JSON.parse(decodeURIComponent(escape(atob_polyfill(payloadBase64 || ''))));
-      
       const payload = {
         student_id: selectedStudent.id,
-        teacher_id: decodedPayload.userId,
+        teacher_id: teacherId,
         date: date,
         type: type,
         daily_prayer_id: type === 'DOA_HARIAN' ? selectedItem.id : null,
@@ -171,17 +183,6 @@ export default function TeacherInputHafalanScreen({ navigation }: any) {
     } finally {
       setSaving(false);
     }
-  };
-
-  const atob_polyfill = (input: string) => {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=';
-    let str = input.replace(/=+$/, '');
-    let output = '';
-    if (str.length % 4 == 1) throw new Error("'atob' failed: The string to be decoded is not correctly encoded.");
-    for (let bc = 0, bs = 0, buffer, i = 0; buffer = str.charAt(i++); ~buffer && (bs = bc % 4 ? bs * 64 + buffer : buffer, bc++ % 4) ? output += String.fromCharCode(255 & bs >> (-2 * bc & 6)) : 0) {
-      buffer = chars.indexOf(buffer);
-    }
-    return output;
   };
 
   const getStudentTodayRecord = (id: number) => todayRecords.find(r => Number(r.student_id) === Number(id));
@@ -308,21 +309,45 @@ export default function TeacherInputHafalanScreen({ navigation }: any) {
 
               <View style={styles.formGroup}>
                 <Text style={styles.label}>Pilih Hafalan</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipScroll}>
-                  {(type === 'DOA_HARIAN' ? dailyPrayers : prayerReadings).map((item) => {
-                    const isSelected = selectedItem?.id === item.id;
-                    return (
-                      <TouchableOpacity 
-                        key={item.id} 
-                        style={[styles.chip, isSelected && styles.chipActive]}
-                        onPress={() => setSelectedItem(item)}
-                      >
-                        <Text style={[styles.chipText, isSelected && styles.chipTextActive]}>{item.title}</Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </ScrollView>
+                <TouchableOpacity style={styles.dropdownField} onPress={() => setShowItemPicker(true)}>
+                  <Text style={[styles.dropdownFieldText, !selectedItem && styles.dropdownPlaceholder]} numberOfLines={1}>
+                    {selectedItem ? selectedItem.title : 'Pilih Doa / Bacaan Sholat...'}
+                  </Text>
+                  <Feather name="chevron-down" size={18} color="#64748B" />
+                </TouchableOpacity>
               </View>
+
+              <Modal visible={showItemPicker} transparent animationType="fade" onRequestClose={() => setShowItemPicker(false)}>
+                <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowItemPicker(false)}>
+                  <View style={styles.modalSheet} onStartShouldSetResponder={() => true}>
+                    <Text style={styles.modalTitle}>
+                      {type === 'DOA_HARIAN' ? 'Pilih Doa Harian' : 'Pilih Bacaan Sholat'}
+                    </Text>
+                    <FlatList
+                      data={type === 'DOA_HARIAN' ? dailyPrayers : prayerReadings}
+                      keyExtractor={(item) => String(item.id)}
+                      style={{ maxHeight: 360 }}
+                      ItemSeparatorComponent={() => <View style={styles.modalDivider} />}
+                      ListEmptyComponent={<Text style={styles.emptyText}>Tidak ada data.</Text>}
+                      renderItem={({ item }) => {
+                        const isSelected = selectedItem?.id === item.id;
+                        return (
+                          <TouchableOpacity
+                            style={[styles.modalItem, isSelected && styles.modalItemActive]}
+                            onPress={() => {
+                              setSelectedItem(item);
+                              setShowItemPicker(false);
+                            }}
+                          >
+                            <Text style={[styles.modalItemText, isSelected && styles.modalItemTextActive]}>{item.title}</Text>
+                            {isSelected && <Feather name="check" size={18} color="#059669" />}
+                          </TouchableOpacity>
+                        );
+                      }}
+                    />
+                  </View>
+                </TouchableOpacity>
+              </Modal>
 
               <View style={styles.formGroup}>
                 <Text style={styles.label}>Status Lulus</Text>
@@ -665,29 +690,72 @@ const styles = StyleSheet.create({
   qualityTextActive: {
     color: '#fff',
   },
-  chipScroll: {
+  dropdownField: {
     flexDirection: 'row',
-  },
-  chip: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 20,
-    backgroundColor: '#F1F5F9',
-    marginRight: 8,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F8FAFC',
     borderWidth: 1,
     borderColor: '#E2E8F0',
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 13,
   },
-  chipActive: {
-    backgroundColor: '#ECFDF5',
-    borderColor: '#059669',
-  },
-  chipText: {
+  dropdownFieldText: {
+    flex: 1,
     fontSize: 14,
     fontWeight: '600',
-    color: '#475569',
+    color: '#1E293B',
+    marginRight: 8,
   },
-  chipTextActive: {
+  dropdownPlaceholder: {
+    color: '#94A3B8',
+    fontWeight: '400',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.45)',
+    justifyContent: 'flex-end',
+  },
+  modalSheet: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingTop: 16,
+    paddingHorizontal: 8,
+    paddingBottom: 24,
+  },
+  modalTitle: {
+    fontSize: 15,
+    fontWeight: 'bold',
+    color: '#1E293B',
+    marginBottom: 8,
+    paddingHorizontal: 12,
+  },
+  modalDivider: {
+    height: 1,
+    backgroundColor: '#F1F5F9',
+  },
+  modalItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 12,
+    paddingVertical: 14,
+    borderRadius: 10,
+  },
+  modalItemActive: {
+    backgroundColor: '#F0FDF4',
+  },
+  modalItemText: {
+    fontSize: 14,
+    color: '#334155',
+    flex: 1,
+    marginRight: 8,
+  },
+  modalItemTextActive: {
     color: '#059669',
+    fontWeight: 'bold',
   },
   saveBtn: {
     backgroundColor: '#059669',

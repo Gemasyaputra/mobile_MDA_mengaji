@@ -13,6 +13,11 @@ import TeacherInputHafalanScreen from './src/screens/TeacherInputHafalanScreen';
 import ParentQRLoginScreen from './src/screens/ParentQRLoginScreen';
 import ParentHistoryScreen from './src/screens/ParentHistoryScreen';
 import ParentKabarDetailScreen from './src/screens/ParentKabarDetailScreen';
+import TeacherSantriListScreen from './src/screens/TeacherSantriListScreen';
+import TeacherSantriDetailScreen from './src/screens/TeacherSantriDetailScreen';
+import TeacherKabarScreen from './src/screens/TeacherKabarScreen';
+import TeacherKabarFormScreen from './src/screens/TeacherKabarFormScreen';
+import TeacherActivityLogScreen from './src/screens/TeacherActivityLogScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -64,6 +69,31 @@ export default function App() {
         <Stack.Screen
           name="ParentKabarDetail"
           component={ParentKabarDetailScreen}
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen
+          name="TeacherSantriList"
+          component={TeacherSantriListScreen}
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen
+          name="TeacherSantriDetail"
+          component={TeacherSantriDetailScreen}
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen
+          name="TeacherKabar"
+          component={TeacherKabarScreen}
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen
+          name="TeacherKabarForm"
+          component={TeacherKabarFormScreen}
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen
+          name="TeacherActivityLog"
+          component={TeacherActivityLogScreen}
           options={{ headerShown: false }}
         />
       </Stack.Navigator>

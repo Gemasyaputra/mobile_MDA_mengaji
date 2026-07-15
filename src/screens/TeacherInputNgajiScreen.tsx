@@ -5,12 +5,14 @@ import { Feather } from '@expo/vector-icons';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_URL } from '../config/api';
+import { handleTeacherAuthError } from '../utils/authError';
 
 export default function TeacherInputNgajiScreen({ navigation }: any) {
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [teacherToken, setTeacherToken] = useState<string | null>(null);
+  const [teacherId, setTeacherId] = useState<number | null>(null);
   const [classes, setClasses] = useState<any[]>([]);
   const [selectedClass, setSelectedClass] = useState<any>(null);
   const [students, setStudents] = useState<any[]>([]);
@@ -40,8 +42,16 @@ export default function TeacherInputNgajiScreen({ navigation }: any) {
       if (token) {
         setTeacherToken(token);
         fetchClasses(token);
+        try {
+          const meRes = await axios.get(`${API_URL}/api/mobile/teacher/me?token=${encodeURIComponent(token)}`);
+          if (meRes.data.success) {
+            setTeacherId(meRes.data.data.id);
+          }
+        } catch (e) {
+          console.log('Error resolving teacher id', e);
+        }
       }
-      
+
       // Fetch surahs for Al-Quran option
       const res = await axios.get(`${API_URL}/api/master-data?type=surahs`);
       if (res.data.success) {
@@ -61,7 +71,8 @@ export default function TeacherInputNgajiScreen({ navigation }: any) {
         setClasses(res.data.data);
       }
     } catch (err) {
-      console.log('Error fetching classes', err);
+      const handled = await handleTeacherAuthError(err, navigation);
+      if (!handled) console.log('Error fetching classes', err);
     }
   };
 
@@ -133,22 +144,16 @@ export default function TeacherInputNgajiScreen({ navigation }: any) {
       Alert.alert('Peringatan', 'Silakan lengkapi Jilid/Surah, Hal/Ayat Awal, dan Akhir.');
       return;
     }
+    if (!teacherId) {
+      Alert.alert('Error', 'Sesi guru tidak valid. Silakan login ulang.');
+      return;
+    }
 
     setSaving(true);
     try {
-      // Decode teacherToken just for ID (the NextAuth wrapper for this endpoint isn't needed if we pass teacher_id)
-      // Since mobile API doesn't exist for learning POST (Wait! It DOES exist at `/api/mobile/teacher/learning`), we can just hit it!
-      // But `/api/mobile/teacher/learning` expects slug, teacherId.
-      // Let's create a temporary payload and send to the web POST `/api/learning-records` but we need teacher_id.
-      // Wait, let's decode the token here to get teacherId since we don't have Buffer, we use atob logic.
-      const safeToken = String(teacherToken || '');
-      const payloadBase64 = safeToken.includes('.') ? safeToken.split('.')[1] : safeToken;
-      // simplified atob logic for RN
-      const decodedPayload = JSON.parse(decodeURIComponent(escape(atob_polyfill(payloadBase64 || ''))));
-      
       const payload = {
         student_id: selectedStudent.id,
-        teacher_id: decodedPayload.userId,
+        teacher_id: teacherId,
         date: date,
         type: type === 'ALQURAN' ? 'QURAN' : 'IQRO',
         level_or_surah: levelOrSurah,
@@ -175,18 +180,6 @@ export default function TeacherInputNgajiScreen({ navigation }: any) {
     } finally {
       setSaving(false);
     }
-  };
-
-  // Simple atob for React Native
-  const atob_polyfill = (input: string) => {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=';
-    let str = input.replace(/=+$/, '');
-    let output = '';
-    if (str.length % 4 == 1) throw new Error("'atob' failed: The string to be decoded is not correctly encoded.");
-    for (let bc = 0, bs = 0, buffer, i = 0; buffer = str.charAt(i++); ~buffer && (bs = bc % 4 ? bs * 64 + buffer : buffer, bc++ % 4) ? output += String.fromCharCode(255 & bs >> (-2 * bc & 6)) : 0) {
-      buffer = chars.indexOf(buffer);
-    }
-    return output;
   };
 
   const getStudentTodayRecord = (id: number) => todayRecords.find(r => Number(r.student_id) === Number(id));

@@ -1,7 +1,23 @@
 // src/config/api.ts
+import Constants from 'expo-constants';
 
-// Ganti IP ini dengan IPv4 laptopmu (dari ipconfig)
-const LOCAL_IP = "192.168.100.6";
-const PORT = "3000";
+const PORT = '3000';
 
-export const API_URL = `http://${LOCAL_IP}:${PORT}`;
+// Isi ini hanya kalau auto-detect di bawah gagal (mis. build produksi / device fisik
+// tanpa Metro). Saat dev lewat Expo Go/dev client, IP LAN terdeteksi otomatis dari
+// host Metro bundler, jadi biasanya tidak perlu diubah manual lagi tiap ganti WiFi.
+const FALLBACK_LOCAL_IP = '192.168.100.104';
+
+function detectDevServerHost(): string | null {
+  const hostUri =
+    Constants.expoConfig?.hostUri ||
+    (Constants as any).expoGoConfig?.debuggerHost ||
+    (Constants as any).manifest2?.extra?.expoClient?.hostUri;
+
+  if (!hostUri) return null;
+  return hostUri.split(':')[0];
+}
+
+const resolvedHost = detectDevServerHost() || FALLBACK_LOCAL_IP;
+
+export const API_URL = `http://${resolvedHost}:${PORT}`;

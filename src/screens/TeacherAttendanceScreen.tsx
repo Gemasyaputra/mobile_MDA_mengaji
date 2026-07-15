@@ -5,6 +5,7 @@ import { Feather } from '@expo/vector-icons';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_URL } from '../config/api';
+import { handleTeacherAuthError } from '../utils/authError';
 
 export default function TeacherAttendanceScreen({ navigation }: any) {
   const [loading, setLoading] = useState(true);
@@ -57,8 +58,11 @@ export default function TeacherAttendanceScreen({ navigation }: any) {
         setClasses(res.data.data);
       }
     } catch (err) {
-      console.log('Error fetching classes', err);
-      Alert.alert('Error', 'Gagal memuat daftar kelas');
+      const handled = await handleTeacherAuthError(err, navigation);
+      if (!handled) {
+        console.log('Error fetching classes', err);
+        Alert.alert('Error', 'Gagal memuat daftar kelas');
+      }
     } finally {
       setLoading(false);
     }
@@ -74,8 +78,11 @@ export default function TeacherAttendanceScreen({ navigation }: any) {
         setStudents(res.data.data);
       }
     } catch (err) {
-      console.log('Error fetching students', err);
-      Alert.alert('Error', 'Gagal memuat daftar santri');
+      const handled = await handleTeacherAuthError(err, navigation);
+      if (!handled) {
+        console.log('Error fetching students', err);
+        Alert.alert('Error', 'Gagal memuat daftar santri');
+      }
     } finally {
       setLoading(false);
     }
@@ -94,8 +101,11 @@ export default function TeacherAttendanceScreen({ navigation }: any) {
         setHistory(res.data.data);
       }
     } catch (err) {
-      console.log('Error fetching history', err);
-      Alert.alert('Error', 'Gagal memuat riwayat presensi');
+      const handled = await handleTeacherAuthError(err, navigation);
+      if (!handled) {
+        console.log('Error fetching history', err);
+        Alert.alert('Error', 'Gagal memuat riwayat presensi');
+      }
     } finally {
       setHistoryLoading(false);
     }
@@ -127,8 +137,11 @@ export default function TeacherAttendanceScreen({ navigation }: any) {
         Alert.alert('Gagal', res.data.message || 'Gagal menyimpan presensi');
       }
     } catch (err) {
-      console.log('Error saving attendance', err);
-      Alert.alert('Error', 'Terjadi kesalahan saat menyimpan presensi');
+      const handled = await handleTeacherAuthError(err, navigation);
+      if (!handled) {
+        console.log('Error saving attendance', err);
+        Alert.alert('Error', 'Terjadi kesalahan saat menyimpan presensi');
+      }
     } finally {
       setSaving(false);
     }
