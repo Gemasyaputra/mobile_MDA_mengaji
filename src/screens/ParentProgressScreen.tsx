@@ -28,6 +28,8 @@ export default function ParentProgressScreen({ route, navigation }: any) {
   const [data, setData] = useState<any>(null);
   const [chartData, setChartData] = useState<AttendanceChartPoint[]>([]);
   const [chartLoading, setChartLoading] = useState(false);
+  const [salatChartData, setSalatChartData] = useState<AttendanceChartPoint[]>([]);
+  const [salatChartLoading, setSalatChartLoading] = useState(false);
 
   const fetchData = useCallback(async () => {
     try {
@@ -38,6 +40,7 @@ export default function ParentProgressScreen({ route, navigation }: any) {
         setData(response.data.data);
         if (response.data.data?.student?.id) {
           fetchChart(response.data.data.student.id);
+          fetchSalatChart(response.data.data.student.id);
         }
       } else {
         setError(response.data.message || 'Gagal mengambil data.');
@@ -61,6 +64,20 @@ export default function ParentProgressScreen({ route, navigation }: any) {
       console.error('Gagal memuat grafik kehadiran', err);
     } finally {
       setChartLoading(false);
+    }
+  };
+
+  const fetchSalatChart = async (studentId: number) => {
+    try {
+      setSalatChartLoading(true);
+      const response = await axios.get(`${API_URL}/api/worship-records?chart=true&type=SALAT_FARDU&student_id=${studentId}`);
+      if (response.data.success) {
+        setSalatChartData(response.data.data || []);
+      }
+    } catch (err) {
+      console.error('Gagal memuat grafik ibadah', err);
+    } finally {
+      setSalatChartLoading(false);
     }
   };
 
@@ -92,6 +109,11 @@ export default function ParentProgressScreen({ route, navigation }: any) {
   }
 
   const thisMonthPct = data?.attendanceSummary?.thisMonthPercentage ?? 0;
+
+  const currentMonthKey = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
+  const salatThisMonth = salatChartData.find((d) => d.month === currentMonthKey);
+  const salatDaysRecorded = salatThisMonth ? Number(salatThisMonth.total_sessions) / 5 : 0;
+  const salatAvgPerDay = salatDaysRecorded > 0 ? Number(salatThisMonth!.total_present) / salatDaysRecorded : 0;
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -130,6 +152,32 @@ export default function ParentProgressScreen({ route, navigation }: any) {
           </TouchableOpacity>
         </View>
 
+        <Text style={styles.sectionTitle}>Ibadah — Solat Fardu</Text>
+        <View style={styles.card}>
+          <View style={styles.attendanceHeaderRow}>
+            <View>
+              <Text style={styles.bigStat}>
+                {salatAvgPerDay.toFixed(1)}
+                <Text style={styles.bigStatSub}> / 5 solat rata-rata/hari</Text>
+              </Text>
+              <Text style={styles.smallLabel}>Bulan ini</Text>
+            </View>
+          </View>
+
+          <View style={styles.divider} />
+
+          {salatChartLoading ? (
+            <ActivityIndicator size="small" color="#059669" />
+          ) : (
+            <AttendanceBarChart data={salatChartData} />
+          )}
+
+          <TouchableOpacity style={styles.historyLink} onPress={() => goToHistory('worship')}>
+            <Text style={styles.historyLinkText}>Lihat Riwayat Ibadah</Text>
+            <Ionicons name="chevron-forward" size={14} color="#059669" />
+          </TouchableOpacity>
+        </View>
+
         <Text style={styles.sectionTitle}>Aktivitas Terbaru</Text>
         <View style={styles.card}>
           <TouchableOpacity style={styles.activityRow} onPress={() => goToHistory('learning')}>
@@ -158,15 +206,15 @@ export default function ParentProgressScreen({ route, navigation }: any) {
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.activityTitle} numberOfLines={1}>
-                {data?.latestMemorization ? `Hafalan: ${data.latestMemorization.surahName || '-'}` : 'Belum ada hafalan'}
+                {data?.latestHafalan ? `Hafalan: ${data.latestHafalan.title || '-'}` : 'Belum ada hafalan'}
               </Text>
-              {data?.latestMemorization && (
+              {data?.latestHafalan && (
                 <Text style={styles.activitySub}>
-                  Ayat {data.latestMemorization.verseStart}-{data.latestMemorization.verseEnd} · {formatDate(data.latestMemorization.date)}
+                  {data.latestHafalan.isCompleted ? 'Lulus' : 'Belum Lulus'} · {formatDate(data.latestHafalan.date)}
                 </Text>
               )}
             </View>
-            {data?.latestMemorization && <Text style={styles.activityBadge}>{data.latestMemorization.quality}</Text>}
+            {data?.latestHafalan && <Text style={styles.activityBadge}>{data.latestHafalan.quality}</Text>}
             <Ionicons name="chevron-forward" size={16} color="#D1D5DB" />
           </TouchableOpacity>
 
@@ -178,15 +226,13 @@ export default function ParentProgressScreen({ route, navigation }: any) {
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.activityTitle} numberOfLines={1}>
-                {data?.latestWorship ? `Ibadah: ${data.latestWorship.title || '-'}` : 'Belum ada catatan ibadah'}
+                {data?.latestIbadah ? `Ibadah: ${data.latestIbadah.prayerName || '-'}` : 'Belum ada catatan ibadah'}
               </Text>
-              {data?.latestWorship && (
-                <Text style={styles.activitySub}>
-                  {data.latestWorship.isCompleted ? 'Lulus' : 'Belum Lulus'} · {formatDate(data.latestWorship.date)}
-                </Text>
+              {data?.latestIbadah && (
+                <Text style={styles.activitySub}>{formatDate(data.latestIbadah.date)}</Text>
               )}
             </View>
-            {data?.latestWorship && <Text style={styles.activityBadge}>{data.latestWorship.quality}</Text>}
+            {data?.latestIbadah && <Text style={styles.activityBadge}>Sudah Solat</Text>}
             <Ionicons name="chevron-forward" size={16} color="#D1D5DB" />
           </TouchableOpacity>
         </View>
@@ -306,12 +352,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   activityTitle: {
-    fontSize: 13,
+    fontSize: 15,
     fontWeight: '600',
     color: '#111827',
   },
   activitySub: {
-    fontSize: 11,
+    fontSize: 13,
     color: '#9CA3AF',
     marginTop: 2,
   },

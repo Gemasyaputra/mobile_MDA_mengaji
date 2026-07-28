@@ -35,10 +35,12 @@ export default function ParentHistoryScreen({ route, navigation }: any) {
       setLoading(true);
       setError('');
 
+      // Hafalan (Doa/Bacaan) dan Ibadah (Salat) sama-sama bersumber dari worship_records,
+      // dipisah lewat filter di level render — bukan endpoint berbeda.
       const endpointByCategory: Record<Category, string> = {
         attendance: `/api/attendance?student_id=${studentId}`,
         learning: `/api/learning-records?student_id=${studentId}&limit=50`,
-        memorization: `/api/memorization-records?student_id=${studentId}&limit=50`,
+        memorization: `/api/worship-records?student_id=${studentId}&limit=50`,
         worship: `/api/worship-records?student_id=${studentId}&limit=50`,
       };
 
@@ -84,26 +86,13 @@ export default function ParentHistoryScreen({ route, navigation }: any) {
           <Text style={styles.recordTitle}>{item.type === 'QURAN' ? 'Al-Qur\'an' : 'Iqro'} — {item.level_or_surah}</Text>
           <Text style={styles.recordSub}>Halaman/Ayat: {item.start_point} - {item.end_point}</Text>
           {item.teacher_name ? <Text style={styles.recordSub}>Guru: {item.teacher_name}</Text> : null}
+          {item.notes ? <Text style={styles.recordNote}>Catatan guru: {item.notes}</Text> : null}
         </View>
       );
     }
 
-    if (category === 'memorization') {
-      const isLancar = item.status === 'LANCAR' || item.status === 'MURAJAAH';
-      return (
-        <View key={item.id} style={styles.recordCard}>
-          <View style={styles.recordHeader}>
-            <Text style={styles.recordDate}>{formatDate(item.date)}</Text>
-            <Text style={styles.badge}>{item.quality}</Text>
-          </View>
-          <Text style={styles.recordTitle}>{item.surah_name || 'Surah'}</Text>
-          <Text style={styles.recordSub}>Ayat: {item.verse_start} - {item.verse_end}</Text>
-          <Text style={[styles.badgeInline, isLancar ? styles.bgSuccess : styles.bgWarning]}>{item.status}</Text>
-        </View>
-      );
-    }
-
-    // worship
+    // Hafalan = Doa Harian / Bacaan Sholat (worship_records, difilter di buildWorshipDisplayItems)
+    // Ibadah (SALAT_FARDU/SALAT_SUNAH) ditangani oleh renderSalatGroup
     const title = item.type === 'BACAAN_SHOLAT' ? item.prayer_reading_title : item.daily_prayer_title;
     return (
       <View key={item.id} style={styles.recordCard}>
@@ -115,9 +104,47 @@ export default function ParentHistoryScreen({ route, navigation }: any) {
         <Text style={[styles.badgeInline, item.is_completed ? styles.bgSuccess : styles.bgWarning]}>
           {item.is_completed ? 'Lulus' : 'Belum Lulus'}
         </Text>
+        {item.notes ? <Text style={styles.recordNote}>Catatan guru: {item.notes}</Text> : null}
       </View>
     );
   };
+
+  // Kelompokkan record SALAT_FARDU/SALAT_SUNAH per tanggal jadi satu kartu (bisa 5x/hari)
+  const buildWorshipDisplayItems = (recs: any[]) => {
+    const items: any[] = [];
+    const groupsByDate: Record<string, { kind: 'salatGroup'; date: string; prayers: string[] }> = {};
+    for (const r of recs) {
+      if (r.type === 'SALAT_FARDU' || r.type === 'SALAT_SUNAH') {
+        let group = groupsByDate[r.date];
+        if (!group) {
+          group = { kind: 'salatGroup', date: r.date, prayers: [] };
+          groupsByDate[r.date] = group;
+          items.push(group);
+        }
+        group.prayers.push(r.prayer_name);
+      } else {
+        items.push({ kind: 'single', record: r });
+      }
+    }
+    return items;
+  };
+
+  const renderSalatGroup = (group: { date: string; prayers: string[] }, idx: number) => (
+    <View key={`salat-${group.date}-${idx}`} style={styles.recordCard}>
+      <View style={styles.recordHeader}>
+        <Text style={styles.recordDate}>{formatDate(group.date)}</Text>
+        <Text style={styles.badge}>{group.prayers.length} Dicatat</Text>
+      </View>
+      <View style={styles.prayerChipRow}>
+        {group.prayers.map((p, i) => (
+          <View key={i} style={styles.prayerChip}>
+            <Ionicons name="checkmark-circle" size={12} color="#059669" />
+            <Text style={styles.prayerChipText}>{p}</Text>
+          </View>
+        ))}
+      </View>
+    </View>
+  );
 
   return (
     <SafeAreaView style={styles.container}>
@@ -154,11 +181,24 @@ export default function ParentHistoryScreen({ route, navigation }: any) {
         </View>
       ) : (
         <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-          {records.length === 0 ? (
-            <Text style={styles.emptyText}>Belum ada riwayat untuk kategori ini.</Text>
-          ) : (
-            records.map(renderRecord)
-          )}
+          {(() => {
+            // Hafalan = Doa Harian/Bacaan Sholat, Ibadah = Salat Fardu/Sunah — sama-sama dari `records` (worship_records)
+            if (category === 'memorization') {
+              const doaBacaan = records.filter((r) => r.type === 'DOA_HARIAN' || r.type === 'BACAAN_SHOLAT');
+              return doaBacaan.length === 0
+                ? <Text style={styles.emptyText}>Belum ada riwayat untuk kategori ini.</Text>
+                : doaBacaan.map(renderRecord);
+            }
+            if (category === 'worship') {
+              const salat = records.filter((r) => r.type === 'SALAT_FARDU' || r.type === 'SALAT_SUNAH');
+              return salat.length === 0
+                ? <Text style={styles.emptyText}>Belum ada riwayat untuk kategori ini.</Text>
+                : buildWorshipDisplayItems(salat).map((it, idx) => renderSalatGroup(it as any, idx));
+            }
+            return records.length === 0
+              ? <Text style={styles.emptyText}>Belum ada riwayat untuk kategori ini.</Text>
+              : records.map(renderRecord);
+          })()}
           <View style={{ height: 40 }} />
         </ScrollView>
       )}
@@ -248,13 +288,13 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   recordTitle: {
-    fontSize: 15,
+    fontSize: 17,
     color: '#111827',
     fontWeight: 'bold',
     marginBottom: 2,
   },
   recordSub: {
-    fontSize: 13,
+    fontSize: 15,
     color: '#6B7280',
     marginBottom: 2,
   },
@@ -286,6 +326,28 @@ const styles = StyleSheet.create({
   },
   bgSuccess: {
     backgroundColor: '#10B981',
+  },
+  prayerChipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 4,
+  },
+  prayerChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 20,
+  },
+  prayerChipText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#065F46',
   },
   bgWarning: {
     backgroundColor: '#F59E0B',

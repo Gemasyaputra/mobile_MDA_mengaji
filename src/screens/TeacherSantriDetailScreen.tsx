@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Alert, Linking } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Alert, Linking, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
@@ -141,7 +141,11 @@ export default function TeacherSantriDetailScreen({ route, navigation }: any) {
         {/* Profile Card */}
         <View style={styles.profileCard}>
           <View style={styles.avatarLarge}>
-            <Ionicons name="person" size={32} color="#059669" />
+            {student.photo_url ? (
+              <Image source={{ uri: student.photo_url }} style={styles.avatarImage} />
+            ) : (
+              <Ionicons name="person" size={32} color="#059669" />
+            )}
           </View>
           <Text style={styles.profileName}>{student.name}</Text>
           <View style={styles.levelBadge}>
@@ -274,6 +278,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 12,
+    overflow: 'hidden',
+  },
+  avatarImage: {
+    width: 72,
+    height: 72,
   },
   profileName: { fontSize: 18, fontWeight: 'bold', color: '#0F172A', marginBottom: 8 },
   levelBadge: { backgroundColor: '#DBEAFE', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 20 },

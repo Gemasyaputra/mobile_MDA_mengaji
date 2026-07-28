@@ -14,6 +14,11 @@ export default function TeacherAttendanceScreen({ navigation }: any) {
   const [classes, setClasses] = useState<any[]>([]);
   const [selectedClass, setSelectedClass] = useState<any>(null);
   const [students, setStudents] = useState<any[]>([]);
+  const [session, setSession] = useState<'PAGI' | 'SIANG'>('PAGI');
+  const [attendanceTime, setAttendanceTime] = useState<string>(() => {
+    const now = new Date();
+    return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+  });
 
   // History State
   const [mode, setMode] = useState<'input' | 'history'>('input');
@@ -68,12 +73,13 @@ export default function TeacherAttendanceScreen({ navigation }: any) {
     }
   };
 
-  const fetchStudents = async (groupId: number) => {
+  const fetchStudents = async (groupId: number, sessionOverride?: 'PAGI' | 'SIANG') => {
     if (!teacherToken) return;
     try {
       setLoading(true);
       setSelectedClass(classes.find(c => c.id === groupId));
-      const res = await axios.get(`${API_URL}/api/mobile/teacher/attendance/list?token=${encodeURIComponent(teacherToken)}&groupId=${groupId}`);
+      const activeSession = sessionOverride || session;
+      const res = await axios.get(`${API_URL}/api/mobile/teacher/attendance/list?token=${encodeURIComponent(teacherToken)}&groupId=${groupId}&session=${activeSession}`);
       if (res.data.success) {
         setStudents(res.data.data);
       }
@@ -86,6 +92,11 @@ export default function TeacherAttendanceScreen({ navigation }: any) {
     } finally {
       setLoading(false);
     }
+  };
+
+  const changeSession = (newSession: 'PAGI' | 'SIANG') => {
+    setSession(newSession);
+    if (selectedClass) fetchStudents(selectedClass.id, newSession);
   };
 
   const fetchHistory = async () => {
@@ -122,10 +133,15 @@ export default function TeacherAttendanceScreen({ navigation }: any) {
     
     setSaving(true);
     try {
+      const now = new Date();
+      const timeNow = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+      setAttendanceTime(timeNow);
       const payload = students.map(s => ({
         studentId: s.id,
         token: teacherToken,
         status: s.status,
+        session,
+        time: timeNow,
         date: new Date().toISOString().split('T')[0]
       }));
 
@@ -221,7 +237,16 @@ export default function TeacherAttendanceScreen({ navigation }: any) {
               <View key={idx} style={styles.historyItemCard}>
                 <View style={styles.historyItemHeader}>
                   <View>
-                    <Text style={styles.historyDateText}>{dateStr}</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Text style={styles.historyDateText}>{dateStr}</Text>
+                      {item.session && (
+                        <View style={[styles.sessionBadge, item.session === 'SIANG' && styles.sessionBadgeSiang]}>
+                          <Text style={[styles.sessionBadgeText, item.session === 'SIANG' && styles.sessionBadgeTextSiang]}>
+                            {item.session === 'SIANG' ? 'Siang' : 'Pagi'}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
                     <Text style={styles.historySubText}>{item.group_name || 'Tanpa Kelas'} • {item.teacher_name || 'Guru'}</Text>
                   </View>
                   <View style={{ alignItems: 'flex-end' }}>
@@ -283,6 +308,22 @@ export default function TeacherAttendanceScreen({ navigation }: any) {
         <View style={styles.dateBanner}>
           <Feather name="calendar" size={16} color="#059669" />
           <Text style={styles.dateText}>{new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</Text>
+          <Text style={styles.dateText}>· {attendanceTime}</Text>
+        </View>
+
+        <View style={styles.sessionToggleContainer}>
+          <TouchableOpacity
+            style={[styles.sessionToggleBtn, session === 'PAGI' && styles.sessionToggleBtnActive]}
+            onPress={() => changeSession('PAGI')}
+          >
+            <Text style={[styles.sessionToggleText, session === 'PAGI' && styles.sessionToggleTextActive]}>Pagi</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.sessionToggleBtn, session === 'SIANG' && styles.sessionToggleBtnActive]}
+            onPress={() => changeSession('SIANG')}
+          >
+            <Text style={[styles.sessionToggleText, session === 'SIANG' && styles.sessionToggleTextActive]}>Siang</Text>
+          </TouchableOpacity>
         </View>
 
         {loading ? (
@@ -293,8 +334,13 @@ export default function TeacherAttendanceScreen({ navigation }: any) {
           <View style={styles.studentsList}>
             {students.map((student, index) => (
               <View key={index} style={styles.studentCard}>
-                <Text style={styles.studentName} numberOfLines={1}>{student.name}</Text>
-                
+                <View style={{ flex: 1, marginRight: 10 }}>
+                  <Text style={styles.studentName} numberOfLines={1}>{student.name}</Text>
+                  {!!student.time && (
+                    <Text style={styles.studentTimeText}>Jam {student.time}</Text>
+                  )}
+                </View>
+
                 <View style={styles.statusButtonsRow}>
                   <TouchableOpacity 
                     style={[styles.statusBtn, student.status === 'HADIR' && styles.statusBtnActiveHadir]}
@@ -500,6 +546,35 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontSize: 14,
   },
+  sessionToggleContainer: {
+    flexDirection: 'row',
+    backgroundColor: '#E2E8F0',
+    padding: 4,
+    borderRadius: 10,
+    marginBottom: 20,
+  },
+  sessionToggleBtn: {
+    flex: 1,
+    paddingVertical: 8,
+    alignItems: 'center',
+    borderRadius: 6,
+  },
+  sessionToggleBtnActive: {
+    backgroundColor: '#fff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  sessionToggleText: {
+    fontSize: 13,
+    fontWeight: 'bold',
+    color: '#64748B',
+  },
+  sessionToggleTextActive: {
+    color: '#059669',
+  },
   studentsList: {
     marginBottom: 30,
   },
@@ -515,11 +590,14 @@ const styles = StyleSheet.create({
     borderColor: '#F1F5F9',
   },
   studentName: {
-    flex: 1,
     fontSize: 15,
     fontWeight: '600',
     color: '#334155',
-    marginRight: 10,
+  },
+  studentTimeText: {
+    fontSize: 11,
+    color: '#94A3B8',
+    marginTop: 2,
   },
   statusButtonsRow: {
     flexDirection: 'row',
@@ -707,6 +785,23 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#64748B',
     marginTop: 2,
+  },
+  sessionBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+    backgroundColor: '#DBEAFE',
+  },
+  sessionBadgeSiang: {
+    backgroundColor: '#FEF3C7',
+  },
+  sessionBadgeText: {
+    fontSize: 10,
+    fontWeight: 'bold',
+    color: '#1D4ED8',
+  },
+  sessionBadgeTextSiang: {
+    color: '#B45309',
   },
   historyRatioText: {
     fontSize: 14,

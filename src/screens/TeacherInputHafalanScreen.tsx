@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, StatusBar, ActivityIndicator, Alert, TextInput, Platform, Modal, FlatList } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_URL } from '../config/api';
@@ -27,6 +28,7 @@ export default function TeacherInputHafalanScreen({ navigation }: any) {
 
   // Form State
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [showDatePicker, setShowDatePicker] = useState(false);
   const [type, setType] = useState('DOA_HARIAN'); // DOA_HARIAN or BACAAN_SHOLAT
   const [selectedItem, setSelectedItem] = useState<any>(null); // from master data
   const [isCompleted, setIsCompleted] = useState(false);
@@ -83,25 +85,28 @@ export default function TeacherInputHafalanScreen({ navigation }: any) {
     }
   };
 
-  const fetchStudents = async (c: any) => {
+  const fetchStudents = async (c: any, dateOverride?: string) => {
     if (!teacherToken) return;
+    const effectiveDate = dateOverride || date;
     try {
       setLoading(true);
       setSelectedClass(c);
       setStep(2);
-      
+
       const res = await axios.get(`${API_URL}/api/mobile/teacher/attendance/list?token=${encodeURIComponent(teacherToken)}&groupId=${c.id}`);
       if (res.data.success) {
         const studentList = res.data.data;
         setStudents(studentList);
-        
-        // Fetch today's records
+
+        // Fetch records untuk tanggal yang dipilih
         if (studentList.length > 0) {
           const ids = studentList.map((s: any) => s.id).join(',');
-          const recRes = await axios.get(`${API_URL}/api/worship-records?group_student_ids=${ids}&date=${date}`);
+          const recRes = await axios.get(`${API_URL}/api/worship-records?group_student_ids=${ids}&date=${effectiveDate}`);
           if (recRes.data.success) {
-            setTodayRecords(recRes.data.data);
+            setTodayRecords(recRes.data.data.filter((r: any) => r.type === 'DOA_HARIAN' || r.type === 'BACAAN_SHOLAT'));
           }
+        } else {
+          setTodayRecords([]);
         }
       }
     } catch (err) {
@@ -111,6 +116,34 @@ export default function TeacherInputHafalanScreen({ navigation }: any) {
       setLoading(false);
     }
   };
+
+  const changeDate = (delta: number) => {
+    const d = new Date(date + 'T00:00:00');
+    d.setDate(d.getDate() + delta);
+    const newDate = d.toISOString().split('T')[0];
+    setDate(newDate);
+    if (selectedClass) fetchStudents(selectedClass, newDate);
+  };
+
+  const goToToday = () => {
+    const todayStr = new Date().toISOString().split('T')[0];
+    setDate(todayStr);
+    if (selectedClass) fetchStudents(selectedClass, todayStr);
+  };
+
+  const onDateChange = (event: any, selected?: Date) => {
+    setShowDatePicker(false);
+    if (event.type === 'set' && selected) {
+      const newDate = selected.toISOString().split('T')[0];
+      setDate(newDate);
+      if (selectedClass) fetchStudents(selectedClass, newDate);
+    }
+  };
+
+  const isToday = date === new Date().toISOString().split('T')[0];
+  const formattedDate = new Date(date + 'T00:00:00').toLocaleDateString('id-ID', {
+    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+  });
 
   const handleStudentSelect = async (student: any) => {
     setSelectedStudent(student);
@@ -123,9 +156,9 @@ export default function TeacherInputHafalanScreen({ navigation }: any) {
 
     try {
       setLoading(true);
-      const recentRes = await axios.get(`${API_URL}/api/worship-records?student_id=${student.id}&limit=5`);
+      const recentRes = await axios.get(`${API_URL}/api/worship-records?student_id=${student.id}&limit=10`);
       if (recentRes.data.success) {
-        setRecentRecords(recentRes.data.data);
+        setRecentRecords(recentRes.data.data.filter((r: any) => r.type === 'DOA_HARIAN' || r.type === 'BACAAN_SHOLAT').slice(0, 5));
       }
     } catch (err) {
       console.log('Error fetching recent', err);
@@ -160,17 +193,17 @@ export default function TeacherInputHafalanScreen({ navigation }: any) {
       };
 
       const res = await axios.post(`${API_URL}/api/worship-records`, payload);
-      
+
       if (res.data.success) {
         Alert.alert('Sukses', 'Catatan hafalan berhasil disimpan!');
-        
+
         // Enhance payload for local display
         const localPayload = {
           ...payload,
           daily_prayer_title: type === 'DOA_HARIAN' ? selectedItem.title : null,
           prayer_reading_title: type === 'BACAAN_SHOLAT' ? selectedItem.title : null
         };
-        
+
         setTodayRecords(prev => [...prev.filter(r => r.student_id !== selectedStudent.id), localPayload]);
         setStep(2);
         setSelectedStudent(null);
@@ -229,6 +262,34 @@ export default function TeacherInputHafalanScreen({ navigation }: any) {
 
         {step === 2 && selectedClass && (
           <View>
+            <View style={styles.dateNavRow}>
+              <TouchableOpacity style={styles.dateNavBtn} onPress={() => changeDate(-1)}>
+                <Feather name="chevron-left" size={20} color="#059669" />
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.dateNavCenter} onPress={() => setShowDatePicker(true)}>
+                <Feather name="calendar" size={14} color="#059669" />
+                <Text style={styles.dateNavText} numberOfLines={1}>{formattedDate}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.dateNavBtn} onPress={() => changeDate(1)} disabled={isToday}>
+                <Feather name="chevron-right" size={20} color={isToday ? '#CBD5E1' : '#059669'} />
+              </TouchableOpacity>
+            </View>
+            {!isToday && (
+              <TouchableOpacity style={styles.todayChip} onPress={goToToday}>
+                <Text style={styles.todayChipText}>Kembali ke Hari Ini</Text>
+              </TouchableOpacity>
+            )}
+
+            {showDatePicker && (
+              <DateTimePicker
+                value={new Date(date + 'T00:00:00')}
+                mode="date"
+                display="default"
+                maximumDate={new Date()}
+                onChange={onDateChange}
+              />
+            )}
+
             <View style={styles.infoBanner}>
               <View>
                 <Text style={styles.infoLabel}>Kelas Terpilih</Text>
@@ -286,19 +347,20 @@ export default function TeacherInputHafalanScreen({ navigation }: any) {
             <View style={styles.studentHeaderCard}>
               <Text style={styles.studentHeaderTitle}>{selectedStudent.name}</Text>
               <Text style={styles.studentHeaderSub}>Hafalan Doa / Sholat</Text>
+              <Text style={styles.studentHeaderDate}>{formattedDate}</Text>
             </View>
 
             <View style={styles.formContainer}>
               <View style={styles.formGroup}>
                 <Text style={styles.label}>Kategori</Text>
                 <View style={styles.rowBtnContainer}>
-                  <TouchableOpacity 
+                  <TouchableOpacity
                     style={[styles.radioBtn, type === 'DOA_HARIAN' && styles.radioBtnActive]}
                     onPress={() => { setType('DOA_HARIAN'); setSelectedItem(null); }}
                   >
                     <Text style={[styles.radioText, type === 'DOA_HARIAN' && styles.radioTextActive]}>Doa Harian</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity 
+                  <TouchableOpacity
                     style={[styles.radioBtn, type === 'BACAAN_SHOLAT' && styles.radioBtnActive]}
                     onPress={() => { setType('BACAAN_SHOLAT'); setSelectedItem(null); }}
                   >
@@ -352,13 +414,13 @@ export default function TeacherInputHafalanScreen({ navigation }: any) {
               <View style={styles.formGroup}>
                 <Text style={styles.label}>Status Lulus</Text>
                 <View style={styles.rowBtnContainer}>
-                  <TouchableOpacity 
+                  <TouchableOpacity
                     style={[styles.radioBtn, isCompleted === true && styles.radioBtnActive]}
                     onPress={() => setIsCompleted(true)}
                   >
                     <Text style={[styles.radioText, isCompleted === true && styles.radioTextActive]}>✓ Lulus</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity 
+                  <TouchableOpacity
                     style={[styles.radioBtn, isCompleted === false && styles.radioBtnActiveError]}
                     onPress={() => setIsCompleted(false)}
                   >
@@ -371,7 +433,7 @@ export default function TeacherInputHafalanScreen({ navigation }: any) {
                 <Text style={styles.label}>Kualitas/Nilai</Text>
                 <View style={styles.rowBtnContainer}>
                   {['A', 'B', 'C'].map(val => (
-                    <TouchableOpacity 
+                    <TouchableOpacity
                       key={val}
                       style={[styles.qualityBtn, quality === val && styles.qualityBtnActive]}
                       onPress={() => setQuality(val)}
@@ -493,6 +555,53 @@ const styles = StyleSheet.create({
     marginTop: 30,
     fontStyle: 'italic',
   },
+  dateNavRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginBottom: 12,
+    overflow: 'hidden',
+  },
+  dateNavBtn: {
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+  },
+  dateNavCenter: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    flexDirection: 'row',
+    gap: 6,
+  },
+  dateNavText: {
+    fontSize: 13,
+    fontWeight: 'bold',
+    color: '#1E293B',
+  },
+  todayChip: {
+    alignSelf: 'center',
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#D1FAE5',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    marginBottom: 12,
+  },
+  todayChipText: {
+    fontSize: 11,
+    fontWeight: 'bold',
+    color: '#059669',
+  },
+  studentHeaderDate: {
+    fontSize: 11,
+    color: '#94A3B8',
+    marginTop: 6,
+  },
   infoBanner: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -574,11 +683,11 @@ const styles = StyleSheet.create({
     color: '#059669',
   },
   studentSubTextPending: {
-    fontSize: 12,
+    fontSize: 14,
     marginTop: 4,
   },
   studentSubTextDone: {
-    fontSize: 12,
+    fontSize: 14,
     color: '#059669',
     marginTop: 4,
   },
@@ -703,7 +812,7 @@ const styles = StyleSheet.create({
   },
   dropdownFieldText: {
     flex: 1,
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: '600',
     color: '#1E293B',
     marginRight: 8,
@@ -748,7 +857,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F0FDF4',
   },
   modalItemText: {
-    fontSize: 14,
+    fontSize: 16,
     color: '#334155',
     flex: 1,
     marginRight: 8,
@@ -792,7 +901,7 @@ const styles = StyleSheet.create({
     borderBottomColor: '#F8FAFC',
   },
   recentItemText: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '600',
     color: '#334155',
   },

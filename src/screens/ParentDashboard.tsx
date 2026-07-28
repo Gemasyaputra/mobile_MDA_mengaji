@@ -107,10 +107,33 @@ export default function ParentDashboard({ route, navigation }: any) {
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
 
-        <View style={styles.profileCard}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{initial}</Text>
+        {data?.student?.isBehind && (
+          <View style={styles.warningBanner}>
+            <Ionicons name="warning" size={20} color="#DC2626" style={{ marginTop: 1 }} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.warningTitle}>Ananda tertinggal dari target hafalan/ngaji</Text>
+              <Text style={styles.warningSub}>
+                Belum ada setoran mengaji/hafalan dalam 14 hari terakhir. Mohon dampingi putra/putri Anda untuk mengaji di rumah.
+              </Text>
+            </View>
           </View>
+        )}
+
+        {data?.student?.teacherNote ? (
+          <View style={styles.noteBox}>
+            <Text style={styles.noteLabel}>CATATAN GURU</Text>
+            <Text style={styles.noteText}>{data.student.teacherNote}</Text>
+          </View>
+        ) : null}
+
+        <View style={styles.profileCard}>
+          {data?.student?.photoUrl ? (
+            <Image source={{ uri: data.student.photoUrl }} style={styles.avatar} resizeMode="cover" />
+          ) : (
+            <View style={styles.avatar}>
+              <Text style={styles.avatarText}>{initial}</Text>
+            </View>
+          )}
           <View style={{ flex: 1 }}>
             <Text style={styles.studentName}>{data?.student?.name}</Text>
             <Text style={styles.studentLevel}>{formatReadingLevel(data?.student?.readingLevel)} · {data?.student?.currentLevel || '-'}</Text>
@@ -134,12 +157,66 @@ export default function ParentDashboard({ route, navigation }: any) {
             <Text style={styles.statLabel}>Nilai Ngaji</Text>
           </View>
           <View style={styles.statTile}>
-            <Ionicons name="ribbon" size={20} color="#059669" />
-            <Text style={styles.statValue}>
-              {data?.latestWorship ? (data.latestWorship.isCompleted ? 'Lulus' : 'Belum') : '-'}
+            <Ionicons name="ribbon" size={20} color="#D97706" />
+            <Text style={styles.statValue} numberOfLines={1}>
+              {data?.latestIbadah ? data.latestIbadah.prayerName : '-'}
             </Text>
             <Text style={styles.statLabel}>Ibadah Terakhir</Text>
           </View>
+        </View>
+
+        <Text style={styles.sectionLabel}>AKTIVITAS TERBARU</Text>
+        <View style={styles.activityCard}>
+          <TouchableOpacity style={styles.activityRow} onPress={() => navigation.jumpTo('Progres')}>
+            <View style={[styles.activityIcon, { backgroundColor: '#D1FAE5' }]}>
+              <Ionicons name="book" size={16} color="#059669" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.activityTitle} numberOfLines={1}>
+                {data?.latestLearning ? `Ngaji: ${data.latestLearning.levelOrSurah}` : 'Belum ada progres ngaji'}
+              </Text>
+              {data?.latestLearning && (
+                <Text style={styles.activitySub}>
+                  Hal/Ayat {data.latestLearning.startPoint}-{data.latestLearning.endPoint}
+                </Text>
+              )}
+            </View>
+            {data?.latestLearning && <Text style={styles.activityBadge}>{data.latestLearning.quality}</Text>}
+            <Ionicons name="chevron-forward" size={16} color="#D1D5DB" />
+          </TouchableOpacity>
+
+          <View style={styles.rowDivider} />
+
+          <TouchableOpacity style={styles.activityRow} onPress={() => navigation.jumpTo('Progres')}>
+            <View style={[styles.activityIcon, { backgroundColor: '#DBEAFE' }]}>
+              <Ionicons name="bookmark" size={16} color="#2563EB" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.activityTitle} numberOfLines={1}>
+                {data?.latestHafalan ? `Hafalan: ${data.latestHafalan.title || '-'}` : 'Belum ada hafalan'}
+              </Text>
+              {data?.latestHafalan && (
+                <Text style={styles.activitySub}>{data.latestHafalan.isCompleted ? 'Lulus' : 'Belum Lulus'}</Text>
+              )}
+            </View>
+            {data?.latestHafalan && <Text style={styles.activityBadge}>{data.latestHafalan.quality}</Text>}
+            <Ionicons name="chevron-forward" size={16} color="#D1D5DB" />
+          </TouchableOpacity>
+
+          <View style={styles.rowDivider} />
+
+          <TouchableOpacity style={styles.activityRow} onPress={() => navigation.jumpTo('Progres')}>
+            <View style={[styles.activityIcon, { backgroundColor: '#FEF3C7' }]}>
+              <Ionicons name="ribbon" size={16} color="#D97706" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.activityTitle} numberOfLines={1}>
+                {data?.latestIbadah ? `Ibadah: ${data.latestIbadah.prayerName}` : 'Belum ada catatan ibadah'}
+              </Text>
+            </View>
+            {data?.latestIbadah && <Text style={styles.activityBadge}>Sudah Solat</Text>}
+            <Ionicons name="chevron-forward" size={16} color="#D1D5DB" />
+          </TouchableOpacity>
         </View>
 
         <TouchableOpacity
@@ -220,6 +297,48 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 16,
   },
+  warningBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 12,
+  },
+  warningTitle: {
+    fontSize: 13,
+    fontWeight: 'bold',
+    color: '#B91C1C',
+  },
+  warningSub: {
+    fontSize: 12,
+    color: '#DC2626',
+    marginTop: 3,
+    lineHeight: 17,
+  },
+  noteBox: {
+    backgroundColor: '#FFFBEB',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 12,
+  },
+  noteLabel: {
+    fontSize: 11,
+    fontWeight: 'bold',
+    color: '#B45309',
+    letterSpacing: 0.5,
+    marginBottom: 4,
+  },
+  noteText: {
+    fontSize: 13,
+    color: '#92400E',
+    lineHeight: 18,
+  },
   profileCard: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -291,6 +410,63 @@ const styles = StyleSheet.create({
     color: '#9CA3AF',
     fontWeight: '600',
     textAlign: 'center',
+  },
+  sectionLabel: {
+    fontSize: 11,
+    fontWeight: 'bold',
+    color: '#9CA3AF',
+    letterSpacing: 0.5,
+    marginBottom: 8,
+    marginTop: 4,
+  },
+  activityCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  activityRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 4,
+  },
+  activityIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  activityTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#111827',
+  },
+  activitySub: {
+    fontSize: 13,
+    color: '#9CA3AF',
+    marginTop: 2,
+  },
+  activityBadge: {
+    fontSize: 11,
+    color: '#059669',
+    backgroundColor: '#D1FAE5',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    fontWeight: 'bold',
+    overflow: 'hidden',
+  },
+  rowDivider: {
+    height: 1,
+    backgroundColor: '#F3F4F6',
+    marginVertical: 10,
   },
   kabarTeaser: {
     flexDirection: 'row',

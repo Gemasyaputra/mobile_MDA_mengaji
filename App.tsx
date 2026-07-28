@@ -10,6 +10,7 @@ import TeacherHome from './src/screens/TeacherHome';
 import TeacherAttendanceScreen from './src/screens/TeacherAttendanceScreen';
 import TeacherInputNgajiScreen from './src/screens/TeacherInputNgajiScreen';
 import TeacherInputHafalanScreen from './src/screens/TeacherInputHafalanScreen';
+import TeacherInputIbadahScreen from './src/screens/TeacherInputIbadahScreen';
 import ParentQRLoginScreen from './src/screens/ParentQRLoginScreen';
 import ParentHistoryScreen from './src/screens/ParentHistoryScreen';
 import ParentKabarDetailScreen from './src/screens/ParentKabarDetailScreen';
@@ -18,6 +19,7 @@ import TeacherSantriDetailScreen from './src/screens/TeacherSantriDetailScreen';
 import TeacherKabarScreen from './src/screens/TeacherKabarScreen';
 import TeacherKabarFormScreen from './src/screens/TeacherKabarFormScreen';
 import TeacherActivityLogScreen from './src/screens/TeacherActivityLogScreen';
+import TeacherProfileScreen from './src/screens/TeacherProfileScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -51,10 +53,15 @@ export default function App() {
           component={TeacherInputNgajiScreen} 
           options={{ headerShown: false }} 
         />
-        <Stack.Screen 
-          name="TeacherInputHafalan" 
-          component={TeacherInputHafalanScreen} 
-          options={{ headerShown: false }} 
+        <Stack.Screen
+          name="TeacherInputHafalan"
+          component={TeacherInputHafalanScreen}
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen
+          name="TeacherInputIbadah"
+          component={TeacherInputIbadahScreen}
+          options={{ headerShown: false }}
         />
         <Stack.Screen
           name="ParentQRLogin"
@@ -94,6 +101,11 @@ export default function App() {
         <Stack.Screen
           name="TeacherActivityLog"
           component={TeacherActivityLogScreen}
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen
+          name="TeacherProfile"
+          component={TeacherProfileScreen}
           options={{ headerShown: false }}
         />
       </Stack.Navigator>

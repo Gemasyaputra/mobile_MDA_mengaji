@@ -193,7 +193,7 @@ export default function TeacherHome({ navigation }: any) {
               <Text style={styles.headerSubtitle}>Assalamualaikum,</Text>
               <Text style={styles.headerTitle}>{data.teacherName}</Text>
             </View>
-            <TouchableOpacity onPress={() => navigation.goBack()} style={styles.profileBadge}>
+            <TouchableOpacity onPress={() => navigation.navigate('TeacherProfile')} style={styles.profileBadge}>
               <Text style={styles.profileBadgeText}>{data.teacherName.charAt(0)}</Text>
             </TouchableOpacity>
           </View>
@@ -312,12 +312,20 @@ export default function TeacherHome({ navigation }: any) {
               <Text style={[styles.quickCardText, { color: '#9333EA' }]}>Setoran Tilawah</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity 
+            <TouchableOpacity
               style={[styles.quickCard, { backgroundColor: '#FAF5FF', borderColor: '#F3E8FF' }]}
               onPress={() => navigation.navigate('TeacherInputHafalan')}
             >
               <Feather name="book" size={24} color="#9333EA" />
               <Text style={[styles.quickCardText, { color: '#9333EA' }]}>Hafalan Santri</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.quickCard, { backgroundColor: '#FFFBEB', borderColor: '#FEF3C7' }]}
+              onPress={() => navigation.navigate('TeacherInputIbadah')}
+            >
+              <Feather name="sunrise" size={24} color="#D97706" />
+              <Text style={[styles.quickCardText, { color: '#D97706' }]}>Ibadah</Text>
             </TouchableOpacity>
           </View>
         </View>
