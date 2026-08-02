@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, StatusBar, ActivityIndicator, Alert, TextInput } from 'react-native';
+﻿import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, StatusBar, ActivityIndicator, TextInput, Image } from 'react-native';
+import { CustomAlert } from '../components/CustomAlert';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -7,6 +8,7 @@ import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_URL } from '../config/api';
 import { handleTeacherAuthError } from '../utils/authError';
+import { toLocalDateString } from '../utils/date';
 
 const SALAT_FARDU_OPTIONS = ['Subuh', 'Dzuhur', 'Ashar', 'Maghrib', 'Isya'];
 const SALAT_SUNAH_OPTIONS = ['Salat Jumat', 'Salat Duha', 'Salat Tahajud', 'Salat Rawatib'];
@@ -26,7 +28,7 @@ export default function TeacherInputIbadahScreen({ navigation }: any) {
   const [recentRecords, setRecentRecords] = useState<any[]>([]);
 
   // Form State
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [date, setDate] = useState(toLocalDateString(new Date()));
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [type, setType] = useState<'SALAT_FARDU' | 'SALAT_SUNAH'>('SALAT_FARDU');
   const [selectedPrayers, setSelectedPrayers] = useState<string[]>([]);
@@ -97,7 +99,7 @@ export default function TeacherInputIbadahScreen({ navigation }: any) {
       }
     } catch (err) {
       console.log('Error fetching students', err);
-      Alert.alert('Error', 'Gagal memuat daftar santri');
+      CustomAlert.alert('Error', 'Gagal memuat daftar santri');
     } finally {
       setLoading(false);
     }
@@ -106,13 +108,13 @@ export default function TeacherInputIbadahScreen({ navigation }: any) {
   const changeDate = (delta: number) => {
     const d = new Date(date + 'T00:00:00');
     d.setDate(d.getDate() + delta);
-    const newDate = d.toISOString().split('T')[0];
+    const newDate = toLocalDateString(d);
     setDate(newDate);
     if (selectedClass) fetchStudents(selectedClass, newDate);
   };
 
   const goToToday = () => {
-    const todayStr = new Date().toISOString().split('T')[0];
+    const todayStr = toLocalDateString(new Date());
     setDate(todayStr);
     if (selectedClass) fetchStudents(selectedClass, todayStr);
   };
@@ -120,13 +122,13 @@ export default function TeacherInputIbadahScreen({ navigation }: any) {
   const onDateChange = (event: any, selected?: Date) => {
     setShowDatePicker(false);
     if (event.type === 'set' && selected) {
-      const newDate = selected.toISOString().split('T')[0];
+      const newDate = toLocalDateString(selected);
       setDate(newDate);
       if (selectedClass) fetchStudents(selectedClass, newDate);
     }
   };
 
-  const isToday = date === new Date().toISOString().split('T')[0];
+  const isToday = date === toLocalDateString(new Date());
   const formattedDate = new Date(date + 'T00:00:00').toLocaleDateString('id-ID', {
     weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
   });
@@ -167,11 +169,11 @@ export default function TeacherInputIbadahScreen({ navigation }: any) {
     if (!selectedStudent || !teacherToken) return;
     const toSave = selectedPrayers.filter(p => !alreadyRecordedForDate.includes(p));
     if (toSave.length === 0) {
-      Alert.alert('Peringatan', 'Silakan centang minimal satu salat yang belum dicatat pada tanggal ini.');
+      CustomAlert.alert('Peringatan', 'Silakan centang minimal satu salat yang belum dicatat pada tanggal ini.');
       return;
     }
     if (!teacherId) {
-      Alert.alert('Error', 'Sesi guru tidak valid. Silakan login ulang.');
+      CustomAlert.alert('Error', 'Sesi guru tidak valid. Silakan login ulang.');
       return;
     }
 
@@ -198,17 +200,17 @@ export default function TeacherInputIbadahScreen({ navigation }: any) {
       }
 
       if (savedPayloads.length > 0) {
-        Alert.alert('Sukses', `${savedPayloads.length} catatan salat berhasil disimpan!`);
+        CustomAlert.alert('Sukses', `${savedPayloads.length} catatan salat berhasil disimpan!`);
         setTodayRecords(prev => [...prev, ...savedPayloads]);
         setRecentRecords(prev => [...savedPayloads, ...prev]);
         setStep(2);
         setSelectedStudent(null);
       } else {
-        Alert.alert('Gagal', 'Gagal menyimpan catatan');
+        CustomAlert.alert('Gagal', 'Gagal menyimpan catatan');
       }
     } catch (err: any) {
       console.log('Error saving worship', err);
-      Alert.alert('Error', err.response?.data?.error || 'Terjadi kesalahan');
+      CustomAlert.alert('Error', err.response?.data?.error || 'Terjadi kesalahan');
     } finally {
       setSaving(false);
     }
@@ -313,7 +315,18 @@ export default function TeacherInputIbadahScreen({ navigation }: any) {
                     onPress={() => handleStudentSelect(student)}
                   >
                     <View style={[styles.avatar, isDone ? styles.avatarDone : styles.avatarPending]}>
-                      {isDone ? <Feather name="check" size={20} color="white" /> : <Text style={styles.avatarText}>{student.name.charAt(0)}</Text>}
+                      {student.photoUrl ? (
+                        <Image source={{ uri: student.photoUrl }} style={styles.avatarImage} resizeMode="cover" />
+                      ) : isDone ? (
+                        <Feather name="check" size={20} color="white" />
+                      ) : (
+                        <Text style={styles.avatarText}>{student.name.charAt(0)}</Text>
+                      )}
+                      {student.photoUrl && isDone && (
+                        <View style={styles.avatarDoneBadge}>
+                          <Feather name="check" size={9} color="white" />
+                        </View>
+                      )}
                     </View>
 
                     <View style={styles.studentInfoBox}>
@@ -428,15 +441,25 @@ export default function TeacherInputIbadahScreen({ navigation }: any) {
             {recentRecords.length > 0 && (
               <View style={styles.recentContainer}>
                 <Text style={styles.recentTitle}>Riwayat Terakhir</Text>
-                {recentRecords.map((r, i) => (
-                  <View key={i} style={styles.recentItem}>
-                    <View>
-                      <Text style={styles.recentItemText}>{r.prayer_name}</Text>
-                      <Text style={styles.recentItemDate}>{new Date(r.date).toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short' })}</Text>
+                {recentRecords.map((r, i) => {
+                  const byParent = r.recorded_by === 'PARENT';
+                  return (
+                    <View key={i} style={styles.recentItem}>
+                      <View>
+                        <Text style={styles.recentItemText}>{r.prayer_name}</Text>
+                        <Text style={styles.recentItemDate}>{new Date(r.date).toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short' })}</Text>
+                      </View>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <View style={[styles.recordedByBadge, byParent && styles.recordedByBadgeParent]}>
+                          <Text style={[styles.recordedByBadgeText, byParent && styles.recordedByBadgeTextParent]}>
+                            {byParent ? 'Ortu' : 'Guru'}
+                          </Text>
+                        </View>
+                        <Feather name="check-circle" size={16} color="#10B981" />
+                      </View>
                     </View>
-                    <Feather name="check-circle" size={16} color="#10B981" />
-                  </View>
-                ))}
+                  );
+                })}
               </View>
             )}
 
@@ -607,6 +630,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
+    overflow: 'visible',
   },
   avatarPending: {
     backgroundColor: '#F1F5F9',
@@ -618,6 +642,24 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#64748B',
     fontSize: 16,
+  },
+  avatarImage: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+  },
+  avatarDoneBadge: {
+    position: 'absolute',
+    right: -2,
+    bottom: -2,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: '#D97706',
+    borderWidth: 2,
+    borderColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   studentInfoBox: {
     flex: 1,
@@ -823,5 +865,22 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: '#94A3B8',
     marginTop: 2,
+  },
+  recordedByBadge: {
+    backgroundColor: '#ECFDF5',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  recordedByBadgeText: {
+    fontSize: 10,
+    fontWeight: 'bold',
+    color: '#059669',
+  },
+  recordedByBadgeParent: {
+    backgroundColor: '#FEF3C7',
+  },
+  recordedByBadgeTextParent: {
+    color: '#B45309',
   },
 });

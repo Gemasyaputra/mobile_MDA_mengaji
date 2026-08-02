@@ -144,7 +144,7 @@ export default function TeacherActivityLogScreen({ route, navigation }: any) {
 
       {loading ? (
         <View style={styles.centerContainer}>
-          <ActivityIndicator size="large" color="#2563EB" />
+          <ActivityIndicator size="large" color="#059669" />
         </View>
       ) : error ? (
         <View style={styles.centerContainer}>
@@ -225,13 +225,13 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#2563EB',
+    backgroundColor: '#059669',
     padding: 16,
     gap: 10,
   },
   backButton: { padding: 4 },
   headerTitle: { fontSize: 17, fontWeight: 'bold', color: '#FFFFFF' },
-  headerSubtitle: { fontSize: 11, color: '#DBEAFE', marginTop: 1 },
+  headerSubtitle: { fontSize: 11, color: '#D1FAE5', marginTop: 1 },
   refreshButton: { padding: 6 },
   controlsRow: { flexDirection: 'row', gap: 10, paddingHorizontal: 16, paddingTop: 14, paddingBottom: 10 },
   searchWrapper: {
@@ -276,7 +276,7 @@ const styles = StyleSheet.create({
   },
   limitItem: { paddingHorizontal: 16, paddingVertical: 10 },
   limitItemText: { fontSize: 13, color: '#334155' },
-  limitItemTextActive: { color: '#2563EB', fontWeight: 'bold' },
+  limitItemTextActive: { color: '#059669', fontWeight: 'bold' },
   pillsRow: { flexGrow: 0, marginBottom: 10 },
   pill: {
     paddingHorizontal: 14,
@@ -286,7 +286,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E2E8F0',
   },
-  pillActive: { backgroundColor: '#2563EB', borderColor: '#2563EB' },
+  pillActive: { backgroundColor: '#059669', borderColor: '#059669' },
   pillText: { fontSize: 12, fontWeight: '600', color: '#64748B' },
   pillTextActive: { color: '#FFFFFF' },
   content: { flex: 1 },
@@ -316,7 +316,7 @@ const styles = StyleSheet.create({
   emptyTitle: { fontSize: 14, fontWeight: 'bold', color: '#475569', marginTop: 12 },
   emptyText: { fontSize: 12, color: '#94A3B8', marginTop: 4, textAlign: 'center' },
   errorText: { color: '#DC2626', textAlign: 'center', marginTop: 12, marginBottom: 16, fontSize: 14 },
-  retryButton: { backgroundColor: '#2563EB', paddingHorizontal: 24, paddingVertical: 12, borderRadius: 8 },
+  retryButton: { backgroundColor: '#059669', paddingHorizontal: 24, paddingVertical: 12, borderRadius: 8 },
   retryText: { color: 'white', fontWeight: 'bold', fontSize: 14 },
   summaryText: { textAlign: 'center', fontSize: 11, color: '#94A3B8', paddingVertical: 8 },
 });

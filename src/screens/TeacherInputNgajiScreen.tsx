@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, StatusBar, ActivityIndicator, Alert, TextInput, Platform, Modal } from 'react-native';
+﻿import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, StatusBar, ActivityIndicator, TextInput, Platform, Modal, Image } from 'react-native';
+import { CustomAlert } from '../components/CustomAlert';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -7,6 +8,7 @@ import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_URL } from '../config/api';
 import { handleTeacherAuthError } from '../utils/authError';
+import { toLocalDateString } from '../utils/date';
 
 export default function TeacherInputNgajiScreen({ navigation }: any) {
   const [step, setStep] = useState<1 | 2 | 3>(1);
@@ -24,13 +26,14 @@ export default function TeacherInputNgajiScreen({ navigation }: any) {
   const [surahModalVisible, setSurahModalVisible] = useState(false);
 
   // Form State
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [date, setDate] = useState(toLocalDateString(new Date()));
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [type, setType] = useState('IQRO');
   const [levelOrSurah, setLevelOrSurah] = useState('');
   const [startPoint, setStartPoint] = useState('');
   const [endPoint, setEndPoint] = useState('');
-  const [quality, setQuality] = useState('A');
+  const [quality, setQuality] = useState(8);
+  const [readingStatus, setReadingStatus] = useState<'LANCAR' | 'MENGULANG'>('LANCAR');
   const [notes, setNotes] = useState('');
 
   useEffect(() => {
@@ -104,7 +107,7 @@ export default function TeacherInputNgajiScreen({ navigation }: any) {
       }
     } catch (err) {
       console.log('Error fetching students', err);
-      Alert.alert('Error', 'Gagal memuat daftar santri');
+      CustomAlert.alert('Error', 'Gagal memuat daftar santri');
     } finally {
       setLoading(false);
     }
@@ -113,13 +116,13 @@ export default function TeacherInputNgajiScreen({ navigation }: any) {
   const changeDate = (delta: number) => {
     const d = new Date(date + 'T00:00:00');
     d.setDate(d.getDate() + delta);
-    const newDate = d.toISOString().split('T')[0];
+    const newDate = toLocalDateString(d);
     setDate(newDate);
     if (selectedClass) fetchStudents(selectedClass, newDate);
   };
 
   const goToToday = () => {
-    const todayStr = new Date().toISOString().split('T')[0];
+    const todayStr = toLocalDateString(new Date());
     setDate(todayStr);
     if (selectedClass) fetchStudents(selectedClass, todayStr);
   };
@@ -127,13 +130,13 @@ export default function TeacherInputNgajiScreen({ navigation }: any) {
   const onDateChange = (event: any, selected?: Date) => {
     setShowDatePicker(false);
     if (event.type === 'set' && selected) {
-      const newDate = selected.toISOString().split('T')[0];
+      const newDate = toLocalDateString(selected);
       setDate(newDate);
       if (selectedClass) fetchStudents(selectedClass, newDate);
     }
   };
 
-  const isToday = date === new Date().toISOString().split('T')[0];
+  const isToday = date === toLocalDateString(new Date());
   const formattedDate = new Date(date + 'T00:00:00').toLocaleDateString('id-ID', {
     weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
   });
@@ -146,7 +149,8 @@ export default function TeacherInputNgajiScreen({ navigation }: any) {
     setLevelOrSurah(initType === 'IQRO' ? 'Jilid 1' : 'Al-Fatihah');
     setStartPoint('');
     setEndPoint('');
-    setQuality('A');
+    setQuality(8);
+    setReadingStatus('LANCAR');
     setNotes('');
     setStep(3);
 
@@ -174,11 +178,11 @@ export default function TeacherInputNgajiScreen({ navigation }: any) {
   const saveRecord = async () => {
     if (!selectedStudent || !teacherToken) return;
     if (!levelOrSurah || !startPoint || !endPoint) {
-      Alert.alert('Peringatan', 'Silakan lengkapi Jilid/Surah, Hal/Ayat Awal, dan Akhir.');
+      CustomAlert.alert('Peringatan', 'Silakan lengkapi Jilid/Surah, Hal/Ayat Awal, dan Akhir.');
       return;
     }
     if (!teacherId) {
-      Alert.alert('Error', 'Sesi guru tidak valid. Silakan login ulang.');
+      CustomAlert.alert('Error', 'Sesi guru tidak valid. Silakan login ulang.');
       return;
     }
 
@@ -193,23 +197,24 @@ export default function TeacherInputNgajiScreen({ navigation }: any) {
         start_point: startPoint,
         end_point: endPoint,
         quality: quality,
+        reading_status: readingStatus,
         notes: notes
       };
 
       const res = await axios.post(`${API_URL}/api/learning-records`, payload);
       
       if (res.data.success) {
-        Alert.alert('Sukses', 'Setoran berhasil disimpan!');
+        CustomAlert.alert('Sukses', 'Setoran berhasil disimpan!');
         // Update local todayRecords
         setTodayRecords(prev => [...prev.filter(r => r.student_id !== selectedStudent.id), payload]);
         setStep(2);
         setSelectedStudent(null);
       } else {
-        Alert.alert('Gagal', res.data.message || 'Gagal menyimpan setoran');
+        CustomAlert.alert('Gagal', res.data.message || 'Gagal menyimpan setoran');
       }
     } catch (err: any) {
       console.log('Error saving learning', err);
-      Alert.alert('Error', err.response?.data?.error || 'Terjadi kesalahan');
+      CustomAlert.alert('Error', err.response?.data?.error || 'Terjadi kesalahan');
     } finally {
       setSaving(false);
     }
@@ -316,9 +321,20 @@ export default function TeacherInputNgajiScreen({ navigation }: any) {
                     onPress={() => handleStudentSelect(student)}
                   >
                     <View style={[styles.avatar, isDone ? styles.avatarDone : styles.avatarPending]}>
-                      {isDone ? <Feather name="check" size={20} color="white" /> : <Text style={styles.avatarText}>{student.name.charAt(0)}</Text>}
+                      {student.photoUrl ? (
+                        <Image source={{ uri: student.photoUrl }} style={styles.avatarImage} resizeMode="cover" />
+                      ) : isDone ? (
+                        <Feather name="check" size={20} color="white" />
+                      ) : (
+                        <Text style={styles.avatarText}>{student.name.charAt(0)}</Text>
+                      )}
+                      {student.photoUrl && isDone && (
+                        <View style={styles.avatarDoneBadge}>
+                          <Feather name="check" size={9} color="white" />
+                        </View>
+                      )}
                     </View>
-                    
+
                     <View style={styles.studentInfoBox}>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
                         <Text style={styles.studentName} numberOfLines={1}>{student.name}</Text>
@@ -326,7 +342,7 @@ export default function TeacherInputNgajiScreen({ navigation }: any) {
                       </View>
                       
                       {isDone ? (
-                        <Text style={styles.studentSubTextDone}>{todayRec.level_or_surah} {todayRec.start_point ? `· ${todayRec.start_point}-${todayRec.end_point}` : ''} · {todayRec.quality}</Text>
+                        <Text style={styles.studentSubTextDone}>{todayRec.level_or_surah} {todayRec.start_point ? `· ${todayRec.start_point}-${todayRec.end_point}` : ''} · Nilai {todayRec.quality}{todayRec.reading_status === 'MENGULANG' ? ' · Ulangi Besok' : ''}</Text>
                       ) : (
                         <Text style={styles.studentSubTextPending}>
                           <Text style={[styles.badgeLevel, isAlquran ? styles.badgeQuran : styles.badgeIqro]}>{isAlquran ? 'AL-QURAN ' : 'IQRO '}</Text>
@@ -414,10 +430,10 @@ export default function TeacherInputNgajiScreen({ navigation }: any) {
               </View>
 
               <View style={styles.formGroup}>
-                <Text style={styles.label}>Kualitas/Nilai</Text>
-                <View style={styles.rowBtnContainer}>
-                  {['A', 'B', 'C', 'D'].map(val => (
-                    <TouchableOpacity 
+                <Text style={styles.label}>Nilai (1-10)</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.rowBtnContainer}>
+                  {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(val => (
+                    <TouchableOpacity
                       key={val}
                       style={[styles.qualityBtn, quality === val && styles.qualityBtnActive]}
                       onPress={() => setQuality(val)}
@@ -425,6 +441,24 @@ export default function TeacherInputNgajiScreen({ navigation }: any) {
                       <Text style={[styles.qualityText, quality === val && styles.qualityTextActive]}>{val}</Text>
                     </TouchableOpacity>
                   ))}
+                </ScrollView>
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Perlu Diulang Besok?</Text>
+                <View style={styles.rowBtnContainer}>
+                  <TouchableOpacity
+                    style={[styles.radioBtn, readingStatus === 'LANCAR' && styles.radioBtnActive]}
+                    onPress={() => setReadingStatus('LANCAR')}
+                  >
+                    <Text style={[styles.radioText, readingStatus === 'LANCAR' && styles.radioTextActive]}>✓ Sudah Lancar</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.radioBtn, readingStatus === 'MENGULANG' && styles.radioBtnActiveError]}
+                    onPress={() => setReadingStatus('MENGULANG')}
+                  >
+                    <Text style={[styles.radioText, readingStatus === 'MENGULANG' && styles.radioTextActiveError]}>↻ Ulangi Besok</Text>
+                  </TouchableOpacity>
                 </View>
               </View>
 
@@ -457,7 +491,10 @@ export default function TeacherInputNgajiScreen({ navigation }: any) {
                   <View key={i} style={styles.recentItem}>
                     <View>
                       <Text style={styles.recentItemText}>{r.level_or_surah} {r.start_point ? `(${r.start_point}-${r.end_point})` : ''}</Text>
-                      <Text style={styles.recentItemDate}>{new Date(r.date).toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short' })}</Text>
+                      <Text style={styles.recentItemDate}>
+                        {new Date(r.date).toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short' })}
+                        {r.reading_status === 'MENGULANG' ? ' · Ulangi Besok' : ''}
+                      </Text>
                     </View>
                     <View style={styles.recentItemQuality}><Text style={styles.recentItemQualityText}>{r.quality}</Text></View>
                   </View>
@@ -670,6 +707,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
+    overflow: 'visible',
   },
   avatarPending: {
     backgroundColor: '#F1F5F9',
@@ -681,6 +719,24 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#64748B',
     fontSize: 16,
+  },
+  avatarImage: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+  },
+  avatarDoneBadge: {
+    position: 'absolute',
+    right: -2,
+    bottom: -2,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: '#10B981',
+    borderWidth: 2,
+    borderColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   studentInfoBox: {
     flex: 1,
@@ -799,13 +855,21 @@ const styles = StyleSheet.create({
   radioTextActive: {
     color: '#059669',
   },
+  radioBtnActiveError: {
+    borderColor: '#F59E0B',
+    backgroundColor: '#FFFBEB',
+  },
+  radioTextActiveError: {
+    color: '#B45309',
+  },
   qualityBtn: {
-    flex: 1,
-    padding: 12,
+    width: 44,
+    height: 44,
     borderRadius: 10,
     borderWidth: 1,
     borderColor: '#E2E8F0',
     alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: '#fff',
   },
   qualityBtnActive: {

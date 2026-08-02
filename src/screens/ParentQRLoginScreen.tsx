@@ -1,9 +1,11 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
+﻿import React, { useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { CustomAlert } from '../components/CustomAlert';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
+import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import axios from 'axios';
 import { API_URL } from '../config/api';
 import { Feather } from '@expo/vector-icons';
@@ -51,7 +53,7 @@ export default function ParentQRLoginScreen({ navigation }: any) {
       }
     } catch (error: any) {
       console.error(error);
-      Alert.alert(
+      CustomAlert.alert(
         "QR Tidak Valid ❌", 
         "Data santri tidak ditemukan. Pastikan Anda menyeken QR Code resmi dari sekolah.",
         [{ text: "Scan Lagi", onPress: () => setScanned(false) }]
@@ -68,7 +70,7 @@ export default function ParentQRLoginScreen({ navigation }: any) {
   const pickImageFromGallery = async () => {
     try {
       let result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ['images'],
         allowsEditing: false,
         quality: 1,
       });
@@ -76,7 +78,12 @@ export default function ParentQRLoginScreen({ navigation }: any) {
       if (!result.canceled && result.assets && result.assets.length > 0) {
         setLoading(true);
         setScanned(true); // Pause camera
-        const uri = result.assets[0].uri;
+
+        // qrserver.com rejects files over 1 MiB, so downscale/compress the picked photo first
+        const context = ImageManipulator.manipulate(result.assets[0].uri);
+        const rendered = await context.resize({ width: 1000 }).renderAsync();
+        const compressed = await rendered.saveAsync({ compress: 0.6, format: SaveFormat.JPEG });
+        const uri = compressed.uri;
 
         // Use api.qrserver.com to decode local image
         const formData = new FormData();
@@ -94,7 +101,7 @@ export default function ParentQRLoginScreen({ navigation }: any) {
           const qrData = response.data[0].symbol[0].data;
           await processQRCode(qrData);
         } else {
-          Alert.alert("Gagal membaca QR", "Tidak ada kode QR yang valid pada gambar tersebut.", [
+          CustomAlert.alert("Gagal membaca QR", "Tidak ada kode QR yang valid pada gambar tersebut.", [
             { text: "Coba Lagi", onPress: () => setScanned(false) }
           ]);
           setLoading(false);
@@ -102,7 +109,7 @@ export default function ParentQRLoginScreen({ navigation }: any) {
       }
     } catch (e) {
       console.error('Gallery picker error', e);
-      Alert.alert("Error", "Gagal memproses gambar.");
+      CustomAlert.alert("Error", "Gagal memproses gambar.");
       setLoading(false);
       setScanned(false);
     }

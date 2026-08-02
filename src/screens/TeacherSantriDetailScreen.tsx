@@ -1,5 +1,6 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Alert, Linking, Image } from 'react-native';
+﻿import React, { useCallback, useEffect, useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Linking, Image } from 'react-native';
+import { CustomAlert } from '../components/CustomAlert';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
@@ -43,7 +44,7 @@ export default function TeacherSantriDetailScreen({ route, navigation }: any) {
       }
     } catch (err) {
       console.error(err);
-      Alert.alert('Error', 'Gagal memuat data santri.');
+      CustomAlert.alert('Error', 'Gagal memuat data santri.');
     } finally {
       setLoading(false);
     }
@@ -54,7 +55,7 @@ export default function TeacherSantriDetailScreen({ route, navigation }: any) {
   }, [fetchAll]);
 
   const handleUpgrade = async () => {
-    Alert.alert(
+    CustomAlert.alert(
       'Konfirmasi Khatam',
       `Apakah santri ${student?.name} telah menyelesaikan Iqro dan siap lanjut ke Al-Quran?`,
       [
@@ -68,11 +69,11 @@ export default function TeacherSantriDetailScreen({ route, navigation }: any) {
               if (res.data.success) {
                 setStudent((prev: any) => ({ ...prev, reading_level: 'ALQURAN' }));
               } else {
-                Alert.alert('Gagal', 'Gagal mengupgrade santri.');
+                CustomAlert.alert('Gagal', 'Gagal mengupgrade santri.');
               }
             } catch (err) {
               console.error(err);
-              Alert.alert('Error', 'Terjadi kesalahan.');
+              CustomAlert.alert('Error', 'Terjadi kesalahan.');
             } finally {
               setUpgrading(false);
             }
@@ -87,7 +88,7 @@ export default function TeacherSantriDetailScreen({ route, navigation }: any) {
     const phone = student.parent_phone.replace(/\D/g, '');
     const text = `Assalamualaikum, Bapak/Ibu orang tua dari ${student.name}. Berikut kabar perkembangan belajar mengaji ananda.`;
     Linking.openURL(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`).catch(() => {
-      Alert.alert('Error', 'Tidak dapat membuka WhatsApp.');
+      CustomAlert.alert('Error', 'Tidak dapat membuka WhatsApp.');
     });
   };
 

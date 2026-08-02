@@ -112,7 +112,7 @@ export default function ParentHistoryScreen({ route, navigation }: any) {
   // Kelompokkan record SALAT_FARDU/SALAT_SUNAH per tanggal jadi satu kartu (bisa 5x/hari)
   const buildWorshipDisplayItems = (recs: any[]) => {
     const items: any[] = [];
-    const groupsByDate: Record<string, { kind: 'salatGroup'; date: string; prayers: string[] }> = {};
+    const groupsByDate: Record<string, { kind: 'salatGroup'; date: string; prayers: { name: string; recordedBy: string }[] }> = {};
     for (const r of recs) {
       if (r.type === 'SALAT_FARDU' || r.type === 'SALAT_SUNAH') {
         let group = groupsByDate[r.date];
@@ -121,7 +121,7 @@ export default function ParentHistoryScreen({ route, navigation }: any) {
           groupsByDate[r.date] = group;
           items.push(group);
         }
-        group.prayers.push(r.prayer_name);
+        group.prayers.push({ name: r.prayer_name, recordedBy: r.recorded_by || 'TEACHER' });
       } else {
         items.push({ kind: 'single', record: r });
       }
@@ -129,19 +129,25 @@ export default function ParentHistoryScreen({ route, navigation }: any) {
     return items;
   };
 
-  const renderSalatGroup = (group: { date: string; prayers: string[] }, idx: number) => (
+  const renderSalatGroup = (group: { date: string; prayers: { name: string; recordedBy: string }[] }, idx: number) => (
     <View key={`salat-${group.date}-${idx}`} style={styles.recordCard}>
       <View style={styles.recordHeader}>
         <Text style={styles.recordDate}>{formatDate(group.date)}</Text>
         <Text style={styles.badge}>{group.prayers.length} Dicatat</Text>
       </View>
       <View style={styles.prayerChipRow}>
-        {group.prayers.map((p, i) => (
-          <View key={i} style={styles.prayerChip}>
-            <Ionicons name="checkmark-circle" size={12} color="#059669" />
-            <Text style={styles.prayerChipText}>{p}</Text>
-          </View>
-        ))}
+        {group.prayers.map((p, i) => {
+          const byParent = p.recordedBy === 'PARENT';
+          return (
+            <View key={i} style={[styles.prayerChip, byParent && styles.prayerChipParent]}>
+              <Ionicons name="checkmark-circle" size={12} color={byParent ? '#B45309' : '#059669'} />
+              <Text style={[styles.prayerChipText, byParent && styles.prayerChipTextParent]}>{p.name}</Text>
+              <Text style={[styles.prayerChipSource, byParent && styles.prayerChipSourceParent]}>
+                {byParent ? 'Ortu' : 'Guru'}
+              </Text>
+            </View>
+          );
+        })}
       </View>
     </View>
   );
@@ -348,6 +354,27 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     color: '#065F46',
+  },
+  prayerChipParent: {
+    backgroundColor: '#FFFBEB',
+    borderColor: '#FDE68A',
+  },
+  prayerChipTextParent: {
+    color: '#92400E',
+  },
+  prayerChipSource: {
+    fontSize: 9,
+    fontWeight: 'bold',
+    color: '#059669',
+    backgroundColor: '#D1FAE5',
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 6,
+    overflow: 'hidden',
+  },
+  prayerChipSourceParent: {
+    color: '#B45309',
+    backgroundColor: '#FEF3C7',
   },
   bgWarning: {
     backgroundColor: '#F59E0B',

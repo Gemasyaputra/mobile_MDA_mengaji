@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -8,10 +8,10 @@ import {
   ScrollView,
   Image,
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import { CustomAlert } from '../components/CustomAlert';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
@@ -43,7 +43,7 @@ export default function TeacherKabarFormScreen({ route, navigation }: any) {
   const pickImages = async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
-      Alert.alert('Izin Diperlukan', 'Izinkan akses galeri untuk memilih foto.');
+      CustomAlert.alert('Izin Diperlukan', 'Izinkan akses galeri untuk memilih foto.');
       return;
     }
 
@@ -61,7 +61,7 @@ export default function TeacherKabarFormScreen({ route, navigation }: any) {
       setImages((prev) => [...prev, ...compressed]);
     } catch (err) {
       console.error(err);
-      Alert.alert('Error', 'Gagal memproses gambar.');
+      CustomAlert.alert('Error', 'Gagal memproses gambar.');
     } finally {
       setCompressing(false);
     }
@@ -73,7 +73,7 @@ export default function TeacherKabarFormScreen({ route, navigation }: any) {
 
   const handleSubmit = async () => {
     if (!title.trim() || !content.trim()) {
-      Alert.alert('Perhatian', 'Judul dan konten wajib diisi.');
+      CustomAlert.alert('Perhatian', 'Judul dan konten wajib diisi.');
       return;
     }
 
@@ -81,7 +81,7 @@ export default function TeacherKabarFormScreen({ route, navigation }: any) {
       setSubmitting(true);
       const token = await AsyncStorage.getItem('teacher_token');
       if (!token) {
-        Alert.alert('Error', 'Sesi tidak valid. Silakan login ulang.');
+        CustomAlert.alert('Error', 'Sesi tidak valid. Silakan login ulang.');
         return;
       }
 
@@ -95,13 +95,13 @@ export default function TeacherKabarFormScreen({ route, navigation }: any) {
       if (response.data.success) {
         navigation.goBack();
       } else {
-        Alert.alert('Gagal', response.data.error || 'Gagal menyimpan kabar.');
+        CustomAlert.alert('Gagal', response.data.error || 'Gagal menyimpan kabar.');
       }
     } catch (err: any) {
       const handled = await handleTeacherAuthError(err, navigation);
       if (!handled) {
         console.error(err);
-        Alert.alert('Error', err?.response?.data?.error || 'Terjadi kesalahan jaringan.');
+        CustomAlert.alert('Error', err?.response?.data?.error || 'Terjadi kesalahan jaringan.');
       }
     } finally {
       setSubmitting(false);

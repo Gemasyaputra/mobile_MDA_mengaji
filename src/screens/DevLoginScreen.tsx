@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Alert, ActivityIndicator } from 'react-native';
+﻿import React, { useState, useEffect } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
+import { CustomAlert } from '../components/CustomAlert';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as WebBrowser from 'expo-web-browser';
@@ -49,7 +50,7 @@ export default function DevLoginScreen({ navigation }: any) {
         const { queryParams } = Linking.parse(result.url);
         
         if (queryParams?.error) {
-           Alert.alert("Gagal Login", "Akses ditolak atau terjadi kesalahan.");
+           CustomAlert.alert("Gagal Login", "Akses ditolak atau terjadi kesalahan.");
            setLoading(false);
            return;
         }
@@ -61,7 +62,7 @@ export default function DevLoginScreen({ navigation }: any) {
           await AsyncStorage.setItem('teacher_token', tokenStr);
           navigation.replace('TeacherHome');
         } else {
-           Alert.alert("Error", "Token tidak ditemukan.");
+           CustomAlert.alert("Error", "Token tidak ditemukan.");
         }
       } else {
         // User cancel atau gagal
@@ -69,7 +70,7 @@ export default function DevLoginScreen({ navigation }: any) {
       }
     } catch (error) {
       console.error(error);
-      Alert.alert("Error", "Gagal membuka layanan Google SSO.");
+      CustomAlert.alert("Error", "Gagal membuka layanan Google SSO.");
       setLoading(false);
     }
   };

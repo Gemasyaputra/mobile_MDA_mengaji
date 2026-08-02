@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+﻿import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -7,8 +7,8 @@ import {
   Image,
   ScrollView,
   ActivityIndicator,
-  Alert,
 } from 'react-native';
+import { CustomAlert } from '../components/CustomAlert';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons, Feather } from '@expo/vector-icons';
@@ -66,7 +66,7 @@ export default function TeacherProfileScreen({ navigation }: any) {
   const handleChangePhoto = async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
-      Alert.alert('Izin Diperlukan', 'Izinkan akses galeri untuk memilih foto.');
+      CustomAlert.alert('Izin Diperlukan', 'Izinkan akses galeri untuk memilih foto.');
       return;
     }
 
@@ -91,7 +91,7 @@ export default function TeacherProfileScreen({ navigation }: any) {
       if (res.data.success) {
         setTeacher(res.data.data);
       } else {
-        Alert.alert('Gagal', res.data.message || 'Gagal menyimpan foto.');
+        CustomAlert.alert('Gagal', res.data.message || 'Gagal menyimpan foto.');
       }
     } catch (err) {
       handleTeacherAuthError(err, navigation);
@@ -101,7 +101,7 @@ export default function TeacherProfileScreen({ navigation }: any) {
   };
 
   const handleLogout = () => {
-    Alert.alert(
+    CustomAlert.alert(
       'Konfirmasi',
       'Yakin ingin keluar dari akun?',
       [

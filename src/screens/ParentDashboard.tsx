@@ -188,8 +188,8 @@ export default function ParentDashboard({ route, navigation }: any) {
           <View style={styles.rowDivider} />
 
           <TouchableOpacity style={styles.activityRow} onPress={() => navigation.jumpTo('Progres')}>
-            <View style={[styles.activityIcon, { backgroundColor: '#DBEAFE' }]}>
-              <Ionicons name="bookmark" size={16} color="#2563EB" />
+            <View style={[styles.activityIcon, { backgroundColor: '#D1FAE5' }]}>
+              <Ionicons name="bookmark" size={16} color="#059669" />
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.activityTitle} numberOfLines={1}>
@@ -218,6 +218,30 @@ export default function ParentDashboard({ route, navigation }: any) {
             <Ionicons name="chevron-forward" size={16} color="#D1D5DB" />
           </TouchableOpacity>
         </View>
+
+        <TouchableOpacity
+          style={styles.salatCta}
+          onPress={() =>
+            navigation.navigate('ParentInputSalat', {
+              slug,
+              studentId: data?.student?.id,
+              studentName: data?.student?.name,
+            })
+          }
+        >
+          <Ionicons name="moon" size={16} color="#D97706" />
+          <Text style={styles.salatCtaText}>Catat Sholat di Rumah</Text>
+          <Ionicons name="chevron-forward" size={16} color="#D97706" />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.materiCta}
+          onPress={() => navigation.navigate('ParentBankMateri')}
+        >
+          <Ionicons name="book" size={16} color="#2563EB" />
+          <Text style={styles.materiCtaText}>Lihat Bank Materi (Doa & Bacaan Sholat)</Text>
+          <Ionicons name="chevron-forward" size={16} color="#2563EB" />
+        </TouchableOpacity>
 
         <TouchableOpacity
           style={styles.kabarTeaser}
@@ -517,6 +541,40 @@ const styles = StyleSheet.create({
   },
   progressCtaText: {
     color: '#059669',
+    fontWeight: 'bold',
+    fontSize: 13,
+  },
+  salatCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#FFFBEB',
+    borderRadius: 14,
+    paddingVertical: 14,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    marginBottom: 12,
+  },
+  salatCtaText: {
+    color: '#D97706',
+    fontWeight: 'bold',
+    fontSize: 13,
+  },
+  materiCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#EFF6FF',
+    borderRadius: 14,
+    paddingVertical: 14,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+    marginBottom: 12,
+  },
+  materiCtaText: {
+    color: '#2563EB',
     fontWeight: 'bold',
     fontSize: 13,
   },

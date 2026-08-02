@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, StatusBar, ActivityIndicator, Alert, RefreshControl } from 'react-native';
+﻿import React, { useState, useEffect, useCallback } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, StatusBar, ActivityIndicator, RefreshControl } from 'react-native';
+import { CustomAlert } from '../components/CustomAlert';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { Feather, MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
@@ -9,8 +10,14 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_URL } from '../config/api';
 import { ActivityItem, ICON_CONFIG, buildTeacherMessage, formatRelativeTime } from '../utils/activityFeed';
 import { handleTeacherAuthError } from '../utils/authError';
+import { toLocalDateString } from '../utils/date';
 
 const LOCATION_CACHE_KEY = 'cached_teacher_location';
+
+// Lokasi default: Masjid Nurul Huda (dipakai sebelum lokasi GPS didapat/di-refresh)
+const MDA_LAT = -0.9379844;
+const MDA_LNG = 100.4335174;
+const MDA_NAME = 'Masjid Nurul Huda';
 
 export default function TeacherHome({ navigation }: any) {
   const insets = useSafeAreaInsets();
@@ -22,6 +29,9 @@ export default function TeacherHome({ navigation }: any) {
     totalClasses: 0,
     totalStudents: 0,
     presentToday: 0,
+    presentPagi: 0,
+    presentSiang: 0,
+    presentSore: 0,
   });
 
   const [teacherId, setTeacherId] = useState<number | null>(null);
@@ -30,7 +40,7 @@ export default function TeacherHome({ navigation }: any) {
 
   // For Real-time Clock
   const [currentTime, setCurrentTime] = useState(new Date());
-  const [locationName, setLocationName] = useState('📍 Memuat lokasi...');
+  const [locationName, setLocationName] = useState(`📍 ${MDA_NAME} (Default)`);
   const [locationRefreshing, setLocationRefreshing] = useState(false);
   const [prayerTimes, setPrayerTimes] = useState([
     { name: 'SUBUH', time: '--:--' },
@@ -66,7 +76,8 @@ export default function TeacherHome({ navigation }: any) {
     try {
       let { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
-        setLocationName('📍 Lokasi ditolak (Default)');
+        setLocationName(`📍 ${MDA_NAME} (Default)`);
+        await fetchPrayerTimes(MDA_LAT, MDA_LNG);
         return;
       }
 
@@ -87,7 +98,8 @@ export default function TeacherHome({ navigation }: any) {
       );
     } catch (e) {
       console.log('Error getting location/prayer', e);
-      setLocationName('📍 Gagal memuat lokasi');
+      setLocationName(`📍 ${MDA_NAME} (Default)`);
+      await fetchPrayerTimes(MDA_LAT, MDA_LNG);
     } finally {
       setLocationRefreshing(false);
     }
@@ -95,6 +107,10 @@ export default function TeacherHome({ navigation }: any) {
 
   useEffect(() => {
     const loadLocation = async () => {
+      // Tampilkan dulu jadwal shalat default (Masjid Nurul Huda) agar tidak kosong
+      // sebelum lokasi cache/GPS berhasil dimuat.
+      await fetchPrayerTimes(MDA_LAT, MDA_LNG);
+
       try {
         const cached = await AsyncStorage.getItem(LOCATION_CACHE_KEY);
         if (cached) {
@@ -162,7 +178,7 @@ export default function TeacherHome({ navigation }: any) {
   const fetchDashboardData = async (token: string) => {
     try {
       setLoading(true);
-      const res = await axios.get(`${API_URL}/api/mobile/teacher/dashboard?token=${encodeURIComponent(token)}`);
+      const res = await axios.get(`${API_URL}/api/mobile/teacher/dashboard?token=${encodeURIComponent(token)}&date=${toLocalDateString(new Date())}`);
       if (res.data.success) {
         setData(res.data.data);
       }
@@ -264,7 +280,11 @@ export default function TeacherHome({ navigation }: any) {
           <View style={styles.statCard}>
             <Text style={styles.statLabel}>HADIR HARI INI</Text>
             <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 8 }}>
-              {loading ? <ActivityIndicator color="#2563EB"/> : <Text style={[styles.statValue, { color: '#2563EB' }]}>{data.presentToday}</Text>}
+              {loading ? <ActivityIndicator color="#059669"/> : (
+                <Text style={[styles.statValue, { color: '#059669' }]}>
+                  {data.presentToday}<Text style={{ fontSize: 14, fontWeight: '700', color: '#94A3B8' }}>/{data.totalStudents}</Text>
+                </Text>
+              )}
               {!loading && data.totalStudents > 0 && (
                 <View style={styles.statBadge}>
                   <Text style={styles.statBadgeText}>
@@ -273,6 +293,23 @@ export default function TeacherHome({ navigation }: any) {
                 </View>
               )}
             </View>
+            {!loading && <Text style={styles.sessionCaption}>santri hadir di min. 1 sesi</Text>}
+            {!loading && (
+              <View style={styles.sessionBreakdownRow}>
+                <View style={[styles.sessionBreakdownBox, styles.sessionBreakdownBoxPagi]}>
+                  <Text style={styles.sessionBreakdownValuePagi}>{data.presentPagi}</Text>
+                  <Text style={styles.sessionBreakdownLabelPagi}>Pagi</Text>
+                </View>
+                <View style={[styles.sessionBreakdownBox, styles.sessionBreakdownBoxSiang]}>
+                  <Text style={styles.sessionBreakdownValueSiang}>{data.presentSiang}</Text>
+                  <Text style={styles.sessionBreakdownLabelSiang}>Siang</Text>
+                </View>
+                <View style={[styles.sessionBreakdownBox, styles.sessionBreakdownBoxSore]}>
+                  <Text style={styles.sessionBreakdownValueSore}>{data.presentSore}</Text>
+                  <Text style={styles.sessionBreakdownLabelSore}>Sore</Text>
+                </View>
+              </View>
+            )}
           </View>
           <View style={[styles.statCard, { width: '100%' }]}>
             <Text style={styles.statLabel}>TOTAL KELAS</Text>
@@ -296,12 +333,12 @@ export default function TeacherHome({ navigation }: any) {
               <Text style={[styles.quickCardText, { color: '#16A34A' }]}>Santri</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity 
-              style={[styles.quickCard, { backgroundColor: '#EFF6FF', borderColor: '#DBEAFE' }]}
+            <TouchableOpacity
+              style={[styles.quickCard, { backgroundColor: '#F0FDFA', borderColor: '#CCFBF1' }]}
               onPress={() => navigation.navigate('TeacherAttendance')}
             >
-              <MaterialCommunityIcons name="line-scan" size={24} color="#2563EB" />
-              <Text style={[styles.quickCardText, { color: '#2563EB' }]}>Presensi</Text>
+              <MaterialCommunityIcons name="line-scan" size={24} color="#0D9488" />
+              <Text style={[styles.quickCardText, { color: '#0D9488' }]}>Presensi</Text>
             </TouchableOpacity>
 
             <TouchableOpacity 
@@ -321,11 +358,17 @@ export default function TeacherHome({ navigation }: any) {
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={[styles.quickCard, { backgroundColor: '#FFFBEB', borderColor: '#FEF3C7' }]}
+              style={[styles.quickCardWide, { backgroundColor: '#FFFBEB', borderColor: '#FEF3C7' }]}
               onPress={() => navigation.navigate('TeacherInputIbadah')}
             >
-              <Feather name="sunrise" size={24} color="#D97706" />
-              <Text style={[styles.quickCardText, { color: '#D97706' }]}>Ibadah</Text>
+              <View style={[styles.quickCardWideIcon, { backgroundColor: '#FEF3C7' }]}>
+                <Feather name="sunrise" size={22} color="#D97706" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.quickCardText, { color: '#D97706' }]}>Ibadah</Text>
+                <Text style={styles.quickCardWideCaption}>Catat sholat & ibadah harian santri</Text>
+              </View>
+              <Feather name="chevron-right" size={20} color="#D97706" />
             </TouchableOpacity>
           </View>
         </View>
@@ -334,7 +377,7 @@ export default function TeacherHome({ navigation }: any) {
         <View style={styles.sectionContainer}>
           <View style={styles.sectionHeaderFlex}>
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <View style={[styles.sectionIndicator, { backgroundColor: '#3B82F6' }]} />
+              <View style={[styles.sectionIndicator, { backgroundColor: '#059669' }]} />
               <Text style={styles.sectionTitle}>AKTIVITAS TERAKHIR</Text>
             </View>
             <View style={styles.filterBadge}>
@@ -344,7 +387,7 @@ export default function TeacherHome({ navigation }: any) {
 
           <View style={styles.activityList}>
             {activitiesLoading ? (
-              <ActivityIndicator color="#3B82F6" style={{ marginVertical: 20 }}/>
+              <ActivityIndicator color="#059669" style={{ marginVertical: 20 }}/>
             ) : activities.length > 0 ? (
               activities.map((act, idx) => {
                 const config = ICON_CONFIG[act.type] || ICON_CONFIG.attendance;
@@ -374,7 +417,7 @@ export default function TeacherHome({ navigation }: any) {
               onPress={() => teacherId && navigation.navigate('TeacherActivityLog', { teacherId })}
             >
               <Text style={styles.viewAllText}>Lihat Semua Aktivitas</Text>
-              <Feather name="arrow-right" size={16} color="#3B82F6" />
+              <Feather name="arrow-right" size={16} color="#059669" />
             </TouchableOpacity>
           </View>
         </View>
@@ -406,7 +449,7 @@ export default function TeacherHome({ navigation }: any) {
         </TouchableOpacity>
         
         <TouchableOpacity style={styles.navItem} onPress={() => {
-          Alert.alert(
+          CustomAlert.alert(
             'Konfirmasi',
             'Yakin ingin keluar dari akun?',
             [
@@ -422,7 +465,7 @@ export default function TeacherHome({ navigation }: any) {
             ]
           );
         }}>
-          <Feather name="settings" size={20} color="#64748B" />
+          <Feather name="log-out" size={20} color="#64748B" />
           <Text style={styles.navText}>Keluar</Text>
         </TouchableOpacity>
       </View>
@@ -593,16 +636,74 @@ const styles = StyleSheet.create({
     color: '#0F172A',
   },
   statBadge: {
-    backgroundColor: '#EFF6FF',
+    backgroundColor: '#ECFDF5',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 12,
     marginBottom: 4,
   },
   statBadgeText: {
-    color: '#2563EB',
+    color: '#059669',
     fontSize: 11,
     fontWeight: 'bold',
+  },
+  sessionCaption: {
+    fontSize: 10,
+    color: '#94A3B8',
+    marginTop: 2,
+  },
+  sessionBreakdownRow: {
+    flexDirection: 'row',
+    gap: 6,
+    marginTop: 8,
+  },
+  sessionBreakdownBox: {
+    flex: 1,
+    borderRadius: 8,
+    paddingVertical: 4,
+    alignItems: 'center',
+  },
+  sessionBreakdownBoxPagi: {
+    backgroundColor: '#DBEAFE',
+  },
+  sessionBreakdownBoxSiang: {
+    backgroundColor: '#FEF3C7',
+  },
+  sessionBreakdownBoxSore: {
+    backgroundColor: '#EDE9FE',
+  },
+  sessionBreakdownValuePagi: {
+    fontSize: 13,
+    fontWeight: '900',
+    color: '#1D4ED8',
+  },
+  sessionBreakdownLabelPagi: {
+    fontSize: 8,
+    fontWeight: 'bold',
+    color: '#1D4ED8',
+    textTransform: 'uppercase',
+  },
+  sessionBreakdownValueSiang: {
+    fontSize: 13,
+    fontWeight: '900',
+    color: '#B45309',
+  },
+  sessionBreakdownLabelSiang: {
+    fontSize: 8,
+    fontWeight: 'bold',
+    color: '#B45309',
+    textTransform: 'uppercase',
+  },
+  sessionBreakdownValueSore: {
+    fontSize: 13,
+    fontWeight: '900',
+    color: '#6D28D9',
+  },
+  sessionBreakdownLabelSore: {
+    fontSize: 8,
+    fontWeight: 'bold',
+    color: '#6D28D9',
+    textTransform: 'uppercase',
   },
   sectionContainer: {
     paddingHorizontal: 20,
@@ -634,13 +735,13 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   filterBadge: {
-    backgroundColor: '#EFF6FF',
+    backgroundColor: '#ECFDF5',
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 12,
   },
   filterBadgeText: {
-    color: '#3B82F6',
+    color: '#059669',
     fontSize: 10,
     fontWeight: 'bold',
   },
@@ -663,6 +764,27 @@ const styles = StyleSheet.create({
   quickCardText: {
     fontSize: 13,
     fontWeight: '600',
+  },
+  quickCardWide: {
+    width: '100%',
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  quickCardWideIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  quickCardWideCaption: {
+    fontSize: 11,
+    color: '#B45309',
+    marginTop: 2,
   },
   activityList: {
     backgroundColor: '#FFF',
@@ -713,7 +835,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   viewAllText: {
-    color: '#3B82F6',
+    color: '#059669',
     fontSize: 13,
     fontWeight: 'bold',
   },

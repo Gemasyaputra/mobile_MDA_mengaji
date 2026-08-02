@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, FlatList, TextInput } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, FlatList, TextInput, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
@@ -99,9 +99,13 @@ export default function TeacherSantriListScreen({ navigation }: any) {
               activeOpacity={0.85}
               onPress={() => navigation.navigate('TeacherSantriDetail', { studentId: item.id, studentName: item.name })}
             >
-              <View style={styles.avatar}>
-                <Text style={styles.avatarText}>{item.name.charAt(0).toUpperCase()}</Text>
-              </View>
+              {item.photoUrl ? (
+                <Image source={{ uri: item.photoUrl }} style={styles.avatarImage} resizeMode="cover" />
+              ) : (
+                <View style={styles.avatar}>
+                  <Text style={styles.avatarText}>{item.name.charAt(0).toUpperCase()}</Text>
+                </View>
+              )}
               <View style={{ flex: 1 }}>
                 <Text style={styles.name}>{item.name}</Text>
                 <Text style={styles.level}>{formatLevel(item)}{item.groupName ? ` • ${item.groupName}` : ''}</Text>
@@ -163,6 +167,7 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   avatarText: { color: '#059669', fontWeight: 'bold', fontSize: 16 },
+  avatarImage: { width: 44, height: 44, borderRadius: 22, marginRight: 12 },
   name: { fontSize: 15, fontWeight: 'bold', color: '#0F172A' },
   level: { fontSize: 12, color: '#64748B', marginTop: 2 },
   summaryText: { textAlign: 'center', color: '#94A3B8', fontSize: 13, marginTop: 8 },

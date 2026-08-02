@@ -1,5 +1,5 @@
-import { Alert } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+﻿import AsyncStorage from '@react-native-async-storage/async-storage';
+import { CustomAlert } from '../components/CustomAlert';
 
 /**
  * Call this from a screen's catch block whenever an axios call to a
@@ -15,7 +15,7 @@ export async function handleTeacherAuthError(err: any, navigation: any): Promise
   if (err?.response?.status !== 401) return false;
 
   await AsyncStorage.removeItem('teacher_token');
-  Alert.alert('Sesi Berakhir', 'Sesi Anda tidak valid atau sudah kedaluwarsa. Silakan login ulang.', [
+  CustomAlert.alert('Sesi Berakhir', 'Sesi Anda tidak valid atau sudah kedaluwarsa. Silakan login ulang.', [
     {
       text: 'OK',
       onPress: () => {

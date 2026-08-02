@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, StatusBar, ActivityIndicator, Alert, TextInput, Platform, Modal, FlatList } from 'react-native';
+﻿import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, StatusBar, ActivityIndicator, TextInput, Platform, Modal, FlatList, Image } from 'react-native';
+import { CustomAlert } from '../components/CustomAlert';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -7,6 +8,7 @@ import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_URL } from '../config/api';
 import { handleTeacherAuthError } from '../utils/authError';
+import { toLocalDateString } from '../utils/date';
 
 export default function TeacherInputHafalanScreen({ navigation }: any) {
   const [step, setStep] = useState<1 | 2 | 3>(1);
@@ -27,12 +29,12 @@ export default function TeacherInputHafalanScreen({ navigation }: any) {
   const [prayerReadings, setPrayerReadings] = useState<any[]>([]);
 
   // Form State
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [date, setDate] = useState(toLocalDateString(new Date()));
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [type, setType] = useState('DOA_HARIAN'); // DOA_HARIAN or BACAAN_SHOLAT
   const [selectedItem, setSelectedItem] = useState<any>(null); // from master data
   const [isCompleted, setIsCompleted] = useState(false);
-  const [quality, setQuality] = useState('A');
+  const [quality, setQuality] = useState(8);
   const [notes, setNotes] = useState('');
   const [showItemPicker, setShowItemPicker] = useState(false);
 
@@ -111,7 +113,7 @@ export default function TeacherInputHafalanScreen({ navigation }: any) {
       }
     } catch (err) {
       console.log('Error fetching students', err);
-      Alert.alert('Error', 'Gagal memuat daftar santri');
+      CustomAlert.alert('Error', 'Gagal memuat daftar santri');
     } finally {
       setLoading(false);
     }
@@ -120,13 +122,13 @@ export default function TeacherInputHafalanScreen({ navigation }: any) {
   const changeDate = (delta: number) => {
     const d = new Date(date + 'T00:00:00');
     d.setDate(d.getDate() + delta);
-    const newDate = d.toISOString().split('T')[0];
+    const newDate = toLocalDateString(d);
     setDate(newDate);
     if (selectedClass) fetchStudents(selectedClass, newDate);
   };
 
   const goToToday = () => {
-    const todayStr = new Date().toISOString().split('T')[0];
+    const todayStr = toLocalDateString(new Date());
     setDate(todayStr);
     if (selectedClass) fetchStudents(selectedClass, todayStr);
   };
@@ -134,13 +136,13 @@ export default function TeacherInputHafalanScreen({ navigation }: any) {
   const onDateChange = (event: any, selected?: Date) => {
     setShowDatePicker(false);
     if (event.type === 'set' && selected) {
-      const newDate = selected.toISOString().split('T')[0];
+      const newDate = toLocalDateString(selected);
       setDate(newDate);
       if (selectedClass) fetchStudents(selectedClass, newDate);
     }
   };
 
-  const isToday = date === new Date().toISOString().split('T')[0];
+  const isToday = date === toLocalDateString(new Date());
   const formattedDate = new Date(date + 'T00:00:00').toLocaleDateString('id-ID', {
     weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
   });
@@ -150,7 +152,7 @@ export default function TeacherInputHafalanScreen({ navigation }: any) {
     setType('DOA_HARIAN');
     setSelectedItem(null);
     setIsCompleted(false);
-    setQuality('A');
+    setQuality(8);
     setNotes('');
     setStep(3);
 
@@ -170,11 +172,11 @@ export default function TeacherInputHafalanScreen({ navigation }: any) {
   const saveRecord = async () => {
     if (!selectedStudent || !teacherToken) return;
     if (!selectedItem) {
-      Alert.alert('Peringatan', 'Silakan pilih Doa/Bacaan terlebih dahulu.');
+      CustomAlert.alert('Peringatan', 'Silakan pilih Doa/Bacaan terlebih dahulu.');
       return;
     }
     if (!teacherId) {
-      Alert.alert('Error', 'Sesi guru tidak valid. Silakan login ulang.');
+      CustomAlert.alert('Error', 'Sesi guru tidak valid. Silakan login ulang.');
       return;
     }
 
@@ -195,7 +197,7 @@ export default function TeacherInputHafalanScreen({ navigation }: any) {
       const res = await axios.post(`${API_URL}/api/worship-records`, payload);
 
       if (res.data.success) {
-        Alert.alert('Sukses', 'Catatan hafalan berhasil disimpan!');
+        CustomAlert.alert('Sukses', 'Catatan hafalan berhasil disimpan!');
 
         // Enhance payload for local display
         const localPayload = {
@@ -208,11 +210,11 @@ export default function TeacherInputHafalanScreen({ navigation }: any) {
         setStep(2);
         setSelectedStudent(null);
       } else {
-        Alert.alert('Gagal', res.data.message || 'Gagal menyimpan catatan');
+        CustomAlert.alert('Gagal', res.data.message || 'Gagal menyimpan catatan');
       }
     } catch (err: any) {
       console.log('Error saving worship', err);
-      Alert.alert('Error', err.response?.data?.error || 'Terjadi kesalahan');
+      CustomAlert.alert('Error', err.response?.data?.error || 'Terjadi kesalahan');
     } finally {
       setSaving(false);
     }
@@ -317,9 +319,20 @@ export default function TeacherInputHafalanScreen({ navigation }: any) {
                     onPress={() => handleStudentSelect(student)}
                   >
                     <View style={[styles.avatar, isDone ? styles.avatarDone : styles.avatarPending]}>
-                      {isDone ? <Feather name="check" size={20} color="white" /> : <Text style={styles.avatarText}>{student.name.charAt(0)}</Text>}
+                      {student.photoUrl ? (
+                        <Image source={{ uri: student.photoUrl }} style={styles.avatarImage} resizeMode="cover" />
+                      ) : isDone ? (
+                        <Feather name="check" size={20} color="white" />
+                      ) : (
+                        <Text style={styles.avatarText}>{student.name.charAt(0)}</Text>
+                      )}
+                      {student.photoUrl && isDone && (
+                        <View style={styles.avatarDoneBadge}>
+                          <Feather name="check" size={9} color="white" />
+                        </View>
+                      )}
                     </View>
-                    
+
                     <View style={styles.studentInfoBox}>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
                         <Text style={styles.studentName} numberOfLines={1}>{student.name}</Text>
@@ -430,9 +443,9 @@ export default function TeacherInputHafalanScreen({ navigation }: any) {
               </View>
 
               <View style={styles.formGroup}>
-                <Text style={styles.label}>Kualitas/Nilai</Text>
-                <View style={styles.rowBtnContainer}>
-                  {['A', 'B', 'C'].map(val => (
+                <Text style={styles.label}>Nilai (1-10)</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.rowBtnContainer}>
+                  {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(val => (
                     <TouchableOpacity
                       key={val}
                       style={[styles.qualityBtn, quality === val && styles.qualityBtnActive]}
@@ -441,7 +454,7 @@ export default function TeacherInputHafalanScreen({ navigation }: any) {
                       <Text style={[styles.qualityText, quality === val && styles.qualityTextActive]}>{val}</Text>
                     </TouchableOpacity>
                   ))}
-                </View>
+                </ScrollView>
               </View>
 
               <View style={styles.formGroup}>
@@ -651,6 +664,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
+    overflow: 'visible',
   },
   avatarPending: {
     backgroundColor: '#F1F5F9',
@@ -662,6 +676,24 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#64748B',
     fontSize: 16,
+  },
+  avatarImage: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+  },
+  avatarDoneBadge: {
+    position: 'absolute',
+    right: -2,
+    bottom: -2,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: '#10B981',
+    borderWidth: 2,
+    borderColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   studentInfoBox: {
     flex: 1,
@@ -779,12 +811,13 @@ const styles = StyleSheet.create({
     color: '#EF4444',
   },
   qualityBtn: {
-    flex: 1,
-    padding: 12,
+    width: 44,
+    height: 44,
     borderRadius: 10,
     borderWidth: 1,
     borderColor: '#E2E8F0',
     alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: '#fff',
   },
   qualityBtnActive: {

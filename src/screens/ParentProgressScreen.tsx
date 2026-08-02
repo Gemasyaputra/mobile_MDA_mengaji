@@ -201,8 +201,8 @@ export default function ParentProgressScreen({ route, navigation }: any) {
           <View style={styles.rowDivider} />
 
           <TouchableOpacity style={styles.activityRow} onPress={() => goToHistory('memorization')}>
-            <View style={[styles.activityIcon, { backgroundColor: '#DBEAFE' }]}>
-              <Ionicons name="bookmark" size={16} color="#2563EB" />
+            <View style={[styles.activityIcon, { backgroundColor: '#D1FAE5' }]}>
+              <Ionicons name="bookmark" size={16} color="#059669" />
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.activityTitle} numberOfLines={1}>

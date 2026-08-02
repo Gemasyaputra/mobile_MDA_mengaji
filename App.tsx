@@ -14,17 +14,22 @@ import TeacherInputIbadahScreen from './src/screens/TeacherInputIbadahScreen';
 import ParentQRLoginScreen from './src/screens/ParentQRLoginScreen';
 import ParentHistoryScreen from './src/screens/ParentHistoryScreen';
 import ParentKabarDetailScreen from './src/screens/ParentKabarDetailScreen';
+import ParentInputSalatScreen from './src/screens/ParentInputSalatScreen';
+import ParentBankMateriScreen from './src/screens/ParentBankMateriScreen';
+import ParentMateriDetailScreen from './src/screens/ParentMateriDetailScreen';
 import TeacherSantriListScreen from './src/screens/TeacherSantriListScreen';
 import TeacherSantriDetailScreen from './src/screens/TeacherSantriDetailScreen';
 import TeacherKabarScreen from './src/screens/TeacherKabarScreen';
 import TeacherKabarFormScreen from './src/screens/TeacherKabarFormScreen';
 import TeacherActivityLogScreen from './src/screens/TeacherActivityLogScreen';
 import TeacherProfileScreen from './src/screens/TeacherProfileScreen';
+import { AlertProvider } from './src/components/CustomAlert';
 
 const Stack = createNativeStackNavigator();
 
 export default function App() {
   return (
+    <AlertProvider>
     <NavigationContainer>
       <StatusBar style="auto" />
       <Stack.Navigator initialRouteName="DevLogin">
@@ -79,6 +84,21 @@ export default function App() {
           options={{ headerShown: false }}
         />
         <Stack.Screen
+          name="ParentInputSalat"
+          component={ParentInputSalatScreen}
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen
+          name="ParentBankMateri"
+          component={ParentBankMateriScreen}
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen
+          name="ParentMateriDetail"
+          component={ParentMateriDetailScreen}
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen
           name="TeacherSantriList"
           component={TeacherSantriListScreen}
           options={{ headerShown: false }}
@@ -110,5 +130,6 @@ export default function App() {
         />
       </Stack.Navigator>
     </NavigationContainer>
+    </AlertProvider>
   );
 }

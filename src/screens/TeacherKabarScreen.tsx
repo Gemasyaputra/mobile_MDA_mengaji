@@ -1,5 +1,6 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, ScrollView, Image, Alert } from 'react-native';
+﻿import React, { useCallback, useEffect, useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, ScrollView, Image } from 'react-native';
+import { CustomAlert } from '../components/CustomAlert';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -76,7 +77,7 @@ export default function TeacherKabarScreen({ navigation }: any) {
 
   const handleDelete = (postId: number) => {
     setMenuOpenId(null);
-    Alert.alert('Hapus Postingan?', 'Tindakan ini tidak dapat dibatalkan.', [
+    CustomAlert.alert('Hapus Postingan?', 'Tindakan ini tidak dapat dibatalkan.', [
       { text: 'Batal', style: 'cancel' },
       {
         text: 'Hapus',
@@ -88,11 +89,11 @@ export default function TeacherKabarScreen({ navigation }: any) {
             if (res.data.success) {
               setPosts((prev) => prev.filter((p) => p.id !== postId));
             } else {
-              Alert.alert('Gagal', res.data.error || 'Gagal menghapus kabar.');
+              CustomAlert.alert('Gagal', res.data.error || 'Gagal menghapus kabar.');
             }
           } catch (err: any) {
             const handled = await handleTeacherAuthError(err, navigation);
-            if (!handled) Alert.alert('Error', err?.response?.data?.error || 'Terjadi kesalahan.');
+            if (!handled) CustomAlert.alert('Error', err?.response?.data?.error || 'Terjadi kesalahan.');
           }
         },
       },

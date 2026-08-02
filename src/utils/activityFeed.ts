@@ -25,7 +25,7 @@ export const TYPE_LABELS: Record<string, string> = {
 };
 
 export const ICON_CONFIG: Record<ActivityType, { icon: string; bg: string; color: string }> = {
-  attendance: { icon: 'checkmark-done-circle-outline', bg: '#EFF6FF', color: '#3B82F6' },
+  attendance: { icon: 'checkmark-done-circle-outline', bg: '#D1FAE5', color: '#059669' },
   learning: { icon: 'book-outline', bg: '#F5F3FF', color: '#8B5CF6' },
   new_student: { icon: 'person-add-outline', bg: '#ECFDF5', color: '#10B981' },
   milestone: { icon: 'trophy-outline', bg: '#FFFBEB', color: '#F59E0B' },
