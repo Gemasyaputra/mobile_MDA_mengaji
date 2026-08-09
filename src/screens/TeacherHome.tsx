@@ -1,5 +1,5 @@
 ﻿import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, StatusBar, ActivityIndicator, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, StatusBar, ActivityIndicator, RefreshControl, Modal } from 'react-native';
 import { CustomAlert } from '../components/CustomAlert';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
@@ -13,6 +13,14 @@ import { handleTeacherAuthError } from '../utils/authError';
 import { toLocalDateString } from '../utils/date';
 
 const LOCATION_CACHE_KEY = 'cached_teacher_location';
+
+const ATTENDANCE_STATUS_META: Record<string, { label: string; bg: string; text: string }> = {
+  HADIR: { label: 'H', bg: '#D1FAE5', text: '#059669' },
+  SAKIT: { label: 'S', bg: '#FEF3C7', text: '#B45309' },
+  IZIN: { label: 'I', bg: '#DBEAFE', text: '#1D4ED8' },
+  ALFA: { label: 'A', bg: '#FEE2E2', text: '#DC2626' },
+};
+const ATTENDANCE_STATUS_DEFAULT = { label: '–', bg: '#F1F5F9', text: '#CBD5E1' };
 
 // Lokasi default: Masjid Nurul Huda (dipakai sebelum lokasi GPS didapat/di-refresh)
 const MDA_LAT = -0.9379844;
@@ -37,6 +45,10 @@ export default function TeacherHome({ navigation }: any) {
   const [teacherId, setTeacherId] = useState<number | null>(null);
   const [activities, setActivities] = useState<ActivityItem[]>([]);
   const [activitiesLoading, setActivitiesLoading] = useState(true);
+
+  const [attendanceDetailVisible, setAttendanceDetailVisible] = useState(false);
+  const [attendanceDetailLoading, setAttendanceDetailLoading] = useState(false);
+  const [attendanceDetailClasses, setAttendanceDetailClasses] = useState<any[]>([]);
 
   // For Real-time Clock
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -190,6 +202,26 @@ export default function TeacherHome({ navigation }: any) {
     }
   };
 
+  const openAttendanceDetail = async () => {
+    setAttendanceDetailVisible(true);
+    setAttendanceDetailLoading(true);
+    try {
+      const token = await AsyncStorage.getItem('teacher_token');
+      if (!token) return;
+      const res = await axios.get(
+        `${API_URL}/api/mobile/teacher/attendance-today?token=${encodeURIComponent(token)}&date=${toLocalDateString(new Date())}`
+      );
+      if (res.data.success) {
+        setAttendanceDetailClasses(res.data.data.classes || []);
+      }
+    } catch (err) {
+      const handled = await handleTeacherAuthError(err, navigation);
+      if (!handled) console.log('Error fetching attendance detail', err);
+    } finally {
+      setAttendanceDetailLoading(false);
+    }
+  };
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#059669" />
@@ -277,8 +309,11 @@ export default function TeacherHome({ navigation }: any) {
             <Text style={styles.statLabel}>TOTAL SANTRI</Text>
             {loading ? <ActivityIndicator color="#059669"/> : <Text style={styles.statValue}>{data.totalStudents}</Text>}
           </View>
-          <View style={styles.statCard}>
-            <Text style={styles.statLabel}>HADIR HARI INI</Text>
+          <TouchableOpacity style={styles.statCard} activeOpacity={0.7} onPress={openAttendanceDetail}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Text style={styles.statLabel}>HADIR HARI INI</Text>
+              <Feather name="chevron-right" size={16} color="#94A3B8" />
+            </View>
             <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 8 }}>
               {loading ? <ActivityIndicator color="#059669"/> : (
                 <Text style={[styles.statValue, { color: '#059669' }]}>
@@ -310,7 +345,7 @@ export default function TeacherHome({ navigation }: any) {
                 </View>
               </View>
             )}
-          </View>
+          </TouchableOpacity>
           <View style={[styles.statCard, { width: '100%' }]}>
             <Text style={styles.statLabel}>TOTAL KELAS</Text>
             {loading ? <ActivityIndicator color="#EA580C"/> : <Text style={[styles.statValue, { color: '#EA580C' }]}>{data.totalClasses}</Text>}
@@ -469,6 +504,80 @@ export default function TeacherHome({ navigation }: any) {
           <Text style={styles.navText}>Keluar</Text>
         </TouchableOpacity>
       </View>
+
+      <Modal
+        visible={attendanceDetailVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setAttendanceDetailVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalSheet, { paddingBottom: insets.bottom + 16 }]}>
+            <View style={styles.modalHandle} />
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Detail Kehadiran Hari Ini</Text>
+              <TouchableOpacity onPress={() => setAttendanceDetailVisible(false)} style={styles.modalCloseBtn}>
+                <Feather name="x" size={20} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            {attendanceDetailLoading ? (
+              <View style={{ paddingVertical: 40, alignItems: 'center' }}>
+                <ActivityIndicator color="#059669" size="large" />
+              </View>
+            ) : attendanceDetailClasses.length === 0 ? (
+              <Text style={styles.modalEmptyText}>Belum ada data santri.</Text>
+            ) : (
+              <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: '100%' }}>
+                {attendanceDetailClasses.map((cls: any) => (
+                  <View key={cls.classId} style={styles.modalClassBlock}>
+                    <Text style={styles.modalClassName}>{cls.className}</Text>
+                    {cls.students.length === 0 ? (
+                      <Text style={styles.modalEmptyText}>Belum ada santri di kelas ini.</Text>
+                    ) : (
+                      <>
+                        <View style={styles.modalSessionHeaderRow}>
+                          <View style={{ flex: 1 }} />
+                          <View style={{ flexDirection: 'row', gap: 6 }}>
+                            {(['Pagi', 'Siang', 'Sore'] as const).map((label) => (
+                              <Text
+                                key={label}
+                                style={styles.modalSessionHeaderText}
+                                numberOfLines={1}
+                                adjustsFontSizeToFit
+                                minimumFontScale={0.7}
+                              >
+                                {label}
+                              </Text>
+                            ))}
+                          </View>
+                        </View>
+                        {cls.students.map((s: any) => (
+                        <View key={s.id} style={styles.modalStudentRow}>
+                          <Text style={styles.modalStudentName} numberOfLines={1}>{s.name}</Text>
+                          <View style={{ flexDirection: 'row', gap: 6 }}>
+                            {(['PAGI', 'SIANG', 'SORE'] as const).map((sess) => {
+                              const status = s.sessions?.[sess];
+                              const meta = status ? (ATTENDANCE_STATUS_META[status] || ATTENDANCE_STATUS_DEFAULT) : ATTENDANCE_STATUS_DEFAULT;
+                              return (
+                                <View key={sess} style={[styles.modalSessionChip, { backgroundColor: meta.bg }]}>
+                                  <Text style={[styles.modalSessionChipText, { color: meta.text }]}>{meta.label}</Text>
+                                </View>
+                              );
+                            })}
+                          </View>
+                        </View>
+                        ))}
+                      </>
+                    )}
+                  </View>
+                ))}
+                <View style={{ height: 8 }} />
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -875,5 +984,94 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: 'bold',
     color: '#10B981',
-  }
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalSheet: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 20,
+    maxHeight: '80%',
+  },
+  modalHandle: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#E2E8F0',
+    alignSelf: 'center',
+    marginBottom: 16,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#111827',
+  },
+  modalCloseBtn: {
+    padding: 4,
+  },
+  modalEmptyText: {
+    color: '#9CA3AF',
+    fontSize: 13,
+    fontStyle: 'italic',
+    textAlign: 'center',
+    paddingVertical: 12,
+  },
+  modalClassBlock: {
+    marginBottom: 16,
+  },
+  modalClassName: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#059669',
+    textTransform: 'uppercase',
+    marginBottom: 8,
+  },
+  modalStudentRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  modalStudentName: {
+    fontSize: 14,
+    color: '#1F2937',
+    flex: 1,
+    marginRight: 8,
+  },
+  modalSessionChip: {
+    width: 30,
+    height: 26,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalSessionChipText: {
+    fontSize: 11,
+    fontWeight: 'bold',
+  },
+  modalSessionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  modalSessionHeaderText: {
+    width: 30,
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#94A3B8',
+    textAlign: 'center',
+    textTransform: 'uppercase',
+  },
 });

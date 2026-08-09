@@ -1,5 +1,5 @@
 ﻿import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, StatusBar, ActivityIndicator, TextInput, Image } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, StatusBar, ActivityIndicator, Image } from 'react-native';
 import { CustomAlert } from '../components/CustomAlert';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -32,7 +32,6 @@ export default function TeacherInputIbadahScreen({ navigation }: any) {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [type, setType] = useState<'SALAT_FARDU' | 'SALAT_SUNAH'>('SALAT_FARDU');
   const [selectedPrayers, setSelectedPrayers] = useState<string[]>([]);
-  const [notes, setNotes] = useState('');
 
   useEffect(() => {
     loadInitialData();
@@ -137,7 +136,6 @@ export default function TeacherInputIbadahScreen({ navigation }: any) {
     setSelectedStudent(student);
     setType('SALAT_FARDU');
     setSelectedPrayers([]);
-    setNotes('');
     setStep(3);
 
     try {
@@ -191,7 +189,7 @@ export default function TeacherInputIbadahScreen({ navigation }: any) {
           prayer_name: prayer,
           is_completed: true,
           quality: null,
-          notes: notes
+          notes: null
         };
         const res = await axios.post(`${API_URL}/api/worship-records`, payload);
         if (res.data.success) {
@@ -406,18 +404,6 @@ export default function TeacherInputIbadahScreen({ navigation }: any) {
                     );
                   })}
                 </View>
-              </View>
-
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>Catatan (Opsional)</Text>
-                <TextInput
-                  style={[styles.input, styles.textArea]}
-                  value={notes}
-                  onChangeText={setNotes}
-                  placeholder="Catatan untuk santri..."
-                  multiline
-                  numberOfLines={3}
-                />
               </View>
 
               <TouchableOpacity

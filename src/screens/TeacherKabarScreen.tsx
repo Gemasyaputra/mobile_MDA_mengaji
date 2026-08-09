@@ -143,7 +143,12 @@ export default function TeacherKabarScreen({ navigation }: any) {
               const isOwner = teacherId !== null && Number(post.author_id) === teacherId;
               const initial = (post.author_name || 'A').charAt(0).toUpperCase();
               return (
-                <View key={post.id} style={styles.postCard}>
+                <TouchableOpacity
+                  key={post.id}
+                  style={styles.postCard}
+                  activeOpacity={0.85}
+                  onPress={() => navigation.navigate('ParentKabarDetail', { id: post.id })}
+                >
                   {images.length > 0 && (
                     <View style={styles.imageWrapper}>
                       <Image source={{ uri: images[0] }} style={styles.postImage} resizeMode="cover" />
@@ -198,7 +203,7 @@ export default function TeacherKabarScreen({ navigation }: any) {
                     <Text style={styles.postTitle}>{post.title}</Text>
                     <Text style={styles.postExcerpt} numberOfLines={3}>{post.content}</Text>
                   </View>
-                </View>
+                </TouchableOpacity>
               );
             })
           )}

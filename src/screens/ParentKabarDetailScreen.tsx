@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -9,13 +9,15 @@ import {
   Image,
   Dimensions,
   Share,
+  Modal,
+  StatusBar,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
-import { API_URL } from '../config/api';
+import { API_URL, PUBLIC_WEB_URL } from '../config/api';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 function formatDate(dateStr: string) {
   try {
@@ -32,6 +34,18 @@ export default function ParentKabarDetailScreen({ route, navigation }: any) {
   const [error, setError] = useState('');
   const [post, setPost] = useState<any>(null);
   const [activeImage, setActiveImage] = useState(0);
+
+  const [viewerVisible, setViewerVisible] = useState(false);
+  const [viewerIndex, setViewerIndex] = useState(0);
+  const viewerScrollRef = useRef<ScrollView>(null);
+
+  useEffect(() => {
+    if (viewerVisible) {
+      requestAnimationFrame(() => {
+        viewerScrollRef.current?.scrollTo({ x: viewerIndex * SCREEN_WIDTH, animated: false });
+      });
+    }
+  }, [viewerVisible]);
 
   useEffect(() => {
     fetchDetail();
@@ -58,8 +72,10 @@ export default function ParentKabarDetailScreen({ route, navigation }: any) {
   const handleShare = async () => {
     if (!post) return;
     try {
+      const url = `${PUBLIC_WEB_URL}/public/kabar/${post.id}`;
       await Share.share({
-        message: `${post.title}\n\n${post.content}\n\n— Kabar Masjid/MDA`,
+        message: `${post.title}\n\n${post.content}\n\n${url}\n\n— Kabar Masjid/MDA`,
+        url, // dipakai iOS; di Android otomatis ikut tergabung ke pesan di atas
       });
     } catch (err) {
       console.error(err);
@@ -105,7 +121,16 @@ export default function ParentKabarDetailScreen({ route, navigation }: any) {
                 }}
               >
                 {images.map((img, idx) => (
-                  <Image key={idx} source={{ uri: img }} style={styles.galleryImage} resizeMode="cover" />
+                  <TouchableOpacity
+                    key={idx}
+                    activeOpacity={0.9}
+                    onPress={() => {
+                      setViewerIndex(idx);
+                      setViewerVisible(true);
+                    }}
+                  >
+                    <Image source={{ uri: img }} style={styles.galleryImage} resizeMode="cover" />
+                  </TouchableOpacity>
                 ))}
               </ScrollView>
               {images.length > 1 && (
@@ -129,6 +154,49 @@ export default function ParentKabarDetailScreen({ route, navigation }: any) {
           <View style={{ height: 40 }} />
         </ScrollView>
       )}
+
+      <Modal
+        visible={viewerVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setViewerVisible(false)}
+      >
+        <StatusBar hidden />
+        <View style={styles.viewerOverlay}>
+          <TouchableOpacity
+            style={styles.viewerCloseBtn}
+            onPress={() => setViewerVisible(false)}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          >
+            <Ionicons name="close" size={28} color="#FFFFFF" />
+          </TouchableOpacity>
+
+          <ScrollView
+            ref={viewerScrollRef}
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            onMomentumScrollEnd={(e) => {
+              const idx = Math.round(e.nativeEvent.contentOffset.x / SCREEN_WIDTH);
+              setViewerIndex(idx);
+            }}
+          >
+            {images.map((img, idx) => (
+              <View key={idx} style={styles.viewerImageWrapper}>
+                <Image source={{ uri: img }} style={styles.viewerImage} resizeMode="contain" />
+              </View>
+            ))}
+          </ScrollView>
+
+          {images.length > 1 && (
+            <View style={styles.viewerDotsRow}>
+              {images.map((_, idx) => (
+                <View key={idx} style={[styles.dot, idx === viewerIndex && styles.dotActive]} />
+              ))}
+            </View>
+          )}
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -232,5 +300,41 @@ const styles = StyleSheet.create({
     color: 'white',
     fontWeight: 'bold',
     fontSize: 16,
+  },
+  viewerOverlay: {
+    flex: 1,
+    backgroundColor: '#000000',
+    justifyContent: 'center',
+  },
+  viewerCloseBtn: {
+    position: 'absolute',
+    top: 44,
+    right: 16,
+    zIndex: 10,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  viewerImageWrapper: {
+    width: SCREEN_WIDTH,
+    height: SCREEN_HEIGHT,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  viewerImage: {
+    width: SCREEN_WIDTH,
+    height: SCREEN_HEIGHT,
+  },
+  viewerDotsRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    position: 'absolute',
+    bottom: 40,
+    left: 0,
+    right: 0,
+    gap: 6,
   },
 });

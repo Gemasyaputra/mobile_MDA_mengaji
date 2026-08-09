@@ -1,5 +1,5 @@
 ﻿import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, StatusBar, ActivityIndicator, TextInput } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, StatusBar, ActivityIndicator } from 'react-native';
 import { CustomAlert } from '../components/CustomAlert';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -24,7 +24,6 @@ export default function ParentInputSalatScreen({ route, navigation }: any) {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [type, setType] = useState<'SALAT_FARDU' | 'SALAT_SUNAH'>('SALAT_FARDU');
   const [selectedPrayers, setSelectedPrayers] = useState<string[]>([]);
-  const [notes, setNotes] = useState('');
 
   useEffect(() => {
     loadData(date);
@@ -102,7 +101,7 @@ export default function ParentInputSalatScreen({ route, navigation }: any) {
     try {
       const savedPayloads: any[] = [];
       for (const prayer of toSave) {
-        const payload = { slug, type, prayer_name: prayer, is_completed: true, date, notes };
+        const payload = { slug, type, prayer_name: prayer, is_completed: true, date, notes: null };
         const res = await axios.post(`${API_URL}/api/mobile/parent/worship`, payload);
         if (res.data.success) {
           savedPayloads.push({ ...payload, student_id: studentId });
@@ -114,7 +113,6 @@ export default function ParentInputSalatScreen({ route, navigation }: any) {
         setTodayRecords(prev => [...prev, ...savedPayloads]);
         setRecentRecords(prev => [...savedPayloads, ...prev]);
         setSelectedPrayers([]);
-        setNotes('');
       } else {
         CustomAlert.alert('Gagal', 'Gagal menyimpan catatan');
       }
@@ -222,18 +220,6 @@ export default function ParentInputSalatScreen({ route, navigation }: any) {
                   );
                 })}
               </View>
-            </View>
-
-            <View style={styles.formGroup}>
-              <Text style={styles.label}>Catatan (Opsional)</Text>
-              <TextInput
-                style={[styles.input, styles.textArea]}
-                value={notes}
-                onChangeText={setNotes}
-                placeholder="Catatan..."
-                multiline
-                numberOfLines={3}
-              />
             </View>
 
             <TouchableOpacity

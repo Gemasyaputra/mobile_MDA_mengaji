@@ -228,7 +228,7 @@ export default function TeacherAttendanceScreen({ navigation }: any) {
 
   const updateStatus = (id: number, status: string) => {
     setStudents(students.map(student =>
-      student.id === id ? { ...student, status } : student
+      student.id === id ? { ...student, status: student.status === status ? null : status } : student
     ));
   };
 

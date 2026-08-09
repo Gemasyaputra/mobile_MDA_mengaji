@@ -1,7 +1,8 @@
 import * as React from 'react';
-import { NavigationContainer } from '@react-navigation/native';
+import { NavigationContainer, LinkingOptions } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { StatusBar } from 'expo-status-bar';
+import * as Linking from 'expo-linking';
 
 // Mengimpor layar-layar kita
 import DevLoginScreen from './src/screens/DevLoginScreen';
@@ -27,10 +28,21 @@ import { AlertProvider } from './src/components/CustomAlert';
 
 const Stack = createNativeStackNavigator();
 
+// Deep link mdamengaji://kabar/<id> (mis. dibuka lewat tombol "Buka di Aplikasi" pada
+// halaman web publik kabar) langsung ke halaman detail kabar, tanpa perlu login dulu.
+const linking: LinkingOptions<any> = {
+  prefixes: [Linking.createURL('/'), 'mdamengaji://'],
+  config: {
+    screens: {
+      ParentKabarDetail: 'kabar/:id',
+    },
+  },
+};
+
 export default function App() {
   return (
     <AlertProvider>
-    <NavigationContainer>
+    <NavigationContainer linking={linking}>
       <StatusBar style="auto" />
       <Stack.Navigator initialRouteName="DevLogin">
         <Stack.Screen 

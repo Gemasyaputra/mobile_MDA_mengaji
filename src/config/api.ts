@@ -21,3 +21,7 @@ function detectDevServerHost(): string | null {
 const resolvedHost = detectDevServerHost() || FALLBACK_LOCAL_IP;
 
 export const API_URL = `http://${resolvedHost}:${PORT}`;
+
+// Domain publik (Vercel) tempat halaman web (login guru, detail kabar publik, dsb) di-host.
+// Dipakai untuk link yang perlu bisa dibuka siapa saja di luar jaringan lokal (mis. saat di-share).
+export const PUBLIC_WEB_URL = 'https://mda-mengaji.vercel.app';
