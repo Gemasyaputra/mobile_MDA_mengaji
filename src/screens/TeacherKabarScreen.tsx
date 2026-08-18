@@ -147,7 +147,7 @@ export default function TeacherKabarScreen({ navigation }: any) {
                   key={post.id}
                   style={styles.postCard}
                   activeOpacity={0.85}
-                  onPress={() => navigation.navigate('ParentKabarDetail', { id: post.id })}
+                  onPress={() => navigation.navigate('KabarDetail', { id: post.id })}
                 >
                   {images.length > 0 && (
                     <View style={styles.imageWrapper}>
@@ -262,7 +262,7 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     elevation: 2,
   },
-  imageWrapper: { width: '100%', height: 170, backgroundColor: '#D1FAE5' },
+  imageWrapper: { width: '100%', aspectRatio: 4 / 3, backgroundColor: '#D1FAE5' },
   postImage: { width: '100%', height: '100%' },
   imageCountBadge: {
     position: 'absolute',
@@ -277,7 +277,7 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   imageCountText: { color: '#FFFFFF', fontSize: 11, fontWeight: 'bold' },
-  postBody: { padding: 16 },
+  postBody: { padding: 16, position: 'relative' },
   authorRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
   avatarCircle: {
     width: 36,
@@ -293,24 +293,26 @@ const styles = StyleSheet.create({
   postDate: { fontSize: 11, color: '#94A3B8', marginTop: 1 },
   menuButton: { padding: 4 },
   menuDropdown: {
+    position: 'absolute',
+    top: 40,
+    right: 16,
+    zIndex: 20,
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    marginBottom: 10,
-    alignSelf: 'flex-end',
     overflow: 'hidden',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.08,
     shadowRadius: 6,
-    elevation: 3,
+    elevation: 6,
   },
   menuItem: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingVertical: 11, minWidth: 120 },
   menuDivider: { height: 1, backgroundColor: '#F1F5F9' },
   menuItemText: { fontSize: 13, fontWeight: '600', color: '#334155' },
   postTitle: { fontSize: 16, fontWeight: 'bold', color: '#111827', marginBottom: 4 },
-  postExcerpt: { fontSize: 13, color: '#6B7280', lineHeight: 19 },
+  postExcerpt: { fontSize: 13, color: '#6B7280', lineHeight: 20 },
   loadMoreButton: {
     alignItems: 'center',
     paddingVertical: 14,

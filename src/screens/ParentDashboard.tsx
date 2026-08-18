@@ -5,12 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_URL } from '../config/api';
-
-function formatReadingLevel(level?: string) {
-  if (level === 'ALQURAN') return "Al-Qur'an";
-  if (level === 'IQRO') return 'Iqro';
-  return level || '-';
-}
+import { qualityBadgeColor } from '../utils/badgeColor';
 
 function attendanceColor(pct: number) {
   if (pct >= 80) return '#10B981';
@@ -136,10 +131,12 @@ export default function ParentDashboard({ route, navigation }: any) {
           )}
           <View style={{ flex: 1 }}>
             <Text style={styles.studentName}>{data?.student?.name}</Text>
-            <Text style={styles.studentLevel}>{formatReadingLevel(data?.student?.readingLevel)} · {data?.student?.currentLevel || '-'}</Text>
-            {data?.latestLearning && (
+            <Text style={styles.studentLevel}>
+              Bacaan: {data?.student?.readingLevel === 'ALQURAN' ? "Al-Qur'an" : (data?.student?.currentLevel || 'Iqro')}
+            </Text>
+            {data?.latestHafalan && (
               <Text style={styles.studentPosition} numberOfLines={1}>
-                Posisi: {data.latestLearning.levelOrSurah} ({data.latestLearning.startPoint}-{data.latestLearning.endPoint})
+                Hafalan Terakhir: {data.latestHafalan.title || '-'}
               </Text>
             )}
           </View>
@@ -157,11 +154,9 @@ export default function ParentDashboard({ route, navigation }: any) {
             <Text style={styles.statLabel}>Nilai Ngaji</Text>
           </View>
           <View style={styles.statTile}>
-            <Ionicons name="ribbon" size={20} color="#D97706" />
-            <Text style={styles.statValue} numberOfLines={1}>
-              {data?.latestIbadah ? data.latestIbadah.prayerName : '-'}
-            </Text>
-            <Text style={styles.statLabel}>Ibadah Terakhir</Text>
+            <Ionicons name="calendar" size={20} color="#D97706" />
+            <Text style={styles.statValue}>{data?.attendanceSummary?.totalHadir ?? '-'}</Text>
+            <Text style={styles.statLabel}>Total Hadir</Text>
           </View>
         </View>
 
@@ -181,7 +176,14 @@ export default function ParentDashboard({ route, navigation }: any) {
                 </Text>
               )}
             </View>
-            {data?.latestLearning && <Text style={styles.activityBadge}>{data.latestLearning.quality}</Text>}
+            {data?.latestLearning && (
+              <Text style={[styles.activityBadge, {
+                backgroundColor: qualityBadgeColor(data.latestLearning.quality).bg,
+                color: qualityBadgeColor(data.latestLearning.quality).fg,
+              }]}>
+                {data.latestLearning.quality}
+              </Text>
+            )}
             <Ionicons name="chevron-forward" size={16} color="#D1D5DB" />
           </TouchableOpacity>
 
@@ -199,7 +201,14 @@ export default function ParentDashboard({ route, navigation }: any) {
                 <Text style={styles.activitySub}>{data.latestHafalan.isCompleted ? 'Lulus' : 'Belum Lulus'}</Text>
               )}
             </View>
-            {data?.latestHafalan && <Text style={styles.activityBadge}>{data.latestHafalan.quality}</Text>}
+            {data?.latestHafalan && (
+              <Text style={[styles.activityBadge, {
+                backgroundColor: qualityBadgeColor(data.latestHafalan.quality).bg,
+                color: qualityBadgeColor(data.latestHafalan.quality).fg,
+              }]}>
+                {data.latestHafalan.quality}
+              </Text>
+            )}
             <Ionicons name="chevron-forward" size={16} color="#D1D5DB" />
           </TouchableOpacity>
 
@@ -219,8 +228,9 @@ export default function ParentDashboard({ route, navigation }: any) {
           </TouchableOpacity>
         </View>
 
+        {/* CTA utama — satu-satunya tombol solid di layar ini */}
         <TouchableOpacity
-          style={styles.salatCta}
+          style={styles.primaryCta}
           onPress={() =>
             navigation.navigate('ParentInputSalat', {
               slug,
@@ -229,34 +239,47 @@ export default function ParentDashboard({ route, navigation }: any) {
             })
           }
         >
-          <Ionicons name="moon" size={16} color="#D97706" />
-          <Text style={styles.salatCtaText}>Catat Sholat di Rumah</Text>
-          <Ionicons name="chevron-forward" size={16} color="#D97706" />
+          <Ionicons name="moon" size={18} color="#FFFFFF" />
+          <Text style={styles.primaryCtaText}>Catat Sholat di Rumah</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity
-          style={styles.materiCta}
-          onPress={() => navigation.navigate('ParentBankMateri')}
-        >
-          <Ionicons name="book" size={16} color="#2563EB" />
-          <Text style={styles.materiCtaText}>Lihat Bank Materi (Doa & Bacaan Sholat)</Text>
-          <Ionicons name="chevron-forward" size={16} color="#2563EB" />
-        </TouchableOpacity>
+        {/* Menu sekunder — satu card list, tanpa warna latar berbeda-beda */}
+        <View style={styles.menuCard}>
+          <TouchableOpacity style={styles.menuRow} onPress={() => navigation.navigate('ParentBankMateri')}>
+            <View style={[styles.activityIcon, { backgroundColor: '#EFF6FF' }]}>
+              <Ionicons name="book" size={16} color="#2563EB" />
+            </View>
+            <Text style={styles.menuRowText}>Lihat Bank Materi (Doa & Bacaan Sholat)</Text>
+            <Ionicons name="chevron-forward" size={16} color="#D1D5DB" />
+          </TouchableOpacity>
 
+          <View style={styles.rowDivider} />
+
+          <TouchableOpacity style={styles.menuRow} onPress={() => navigation.jumpTo('Progres')}>
+            <View style={[styles.activityIcon, { backgroundColor: '#ECFDF5' }]}>
+              <Ionicons name="stats-chart" size={16} color="#059669" />
+            </View>
+            <Text style={styles.menuRowText}>Lihat Progres Lengkap & Riwayat</Text>
+            <Ionicons name="chevron-forward" size={16} color="#D1D5DB" />
+          </TouchableOpacity>
+        </View>
+
+        {/* Banner Kabar — sengaja dibuat beda gaya dari menu di atas supaya tidak terbaca sebagai tombol navigasi */}
         <TouchableOpacity
-          style={styles.kabarTeaser}
+          style={styles.kabarBanner}
           activeOpacity={0.85}
           onPress={() =>
             kabarPreview
-              ? navigation.navigate('ParentKabarDetail', { id: kabarPreview.id })
+              ? navigation.navigate('KabarDetail', { id: kabarPreview.id })
               : navigation.jumpTo('Kabar')
           }
         >
+          <View style={styles.kabarBannerAccent} />
           {kabarPreview && Array.isArray(kabarPreview.images) && kabarPreview.images.length > 0 ? (
             <Image source={{ uri: kabarPreview.images[0] }} style={styles.kabarThumb} resizeMode="cover" />
           ) : (
             <View style={[styles.kabarThumb, styles.kabarThumbPlaceholder]}>
-              <Ionicons name="megaphone" size={20} color="#FFFFFF" />
+              <Ionicons name="megaphone" size={22} color="#FFFFFF" />
             </View>
           )}
           <View style={{ flex: 1 }}>
@@ -266,12 +289,6 @@ export default function ParentDashboard({ route, navigation }: any) {
             </Text>
           </View>
           <Ionicons name="chevron-forward" size={18} color="#9CA3AF" />
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.progressCta} onPress={() => navigation.jumpTo('Progres')}>
-          <Ionicons name="stats-chart" size={16} color="#059669" />
-          <Text style={styles.progressCtaText}>Lihat Progres Lengkap & Riwayat</Text>
-          <Ionicons name="chevron-forward" size={16} color="#059669" />
         </TouchableOpacity>
 
         <View style={{ height: 40 }} />
@@ -492,7 +509,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F3F4F6',
     marginVertical: 10,
   },
-  kabarTeaser: {
+  kabarBanner: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
@@ -500,16 +517,26 @@ const styles = StyleSheet.create({
     padding: 12,
     marginBottom: 12,
     gap: 12,
+    overflow: 'hidden',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
     shadowRadius: 6,
     elevation: 2,
   },
+  kabarBannerAccent: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 4,
+    backgroundColor: '#059669',
+  },
   kabarThumb: {
-    width: 46,
-    height: 46,
+    width: 54,
+    height: 54,
     borderRadius: 10,
+    marginLeft: 6,
   },
   kabarThumbPlaceholder: {
     backgroundColor: '#10B981',
@@ -528,55 +555,49 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginTop: 2,
   },
-  progressCta: {
+  primaryCta: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: '#ECFDF5',
+    backgroundColor: '#059669',
     borderRadius: 14,
-    paddingVertical: 14,
-    borderWidth: 1,
-    borderColor: '#A7F3D0',
-  },
-  progressCtaText: {
-    color: '#059669',
-    fontWeight: 'bold',
-    fontSize: 13,
-  },
-  salatCta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: '#FFFBEB',
-    borderRadius: 14,
-    paddingVertical: 14,
-    borderWidth: 1,
-    borderColor: '#FDE68A',
+    paddingVertical: 15,
     marginBottom: 12,
+    shadowColor: '#059669',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 3,
   },
-  salatCtaText: {
-    color: '#D97706',
+  primaryCtaText: {
+    color: '#FFFFFF',
     fontWeight: 'bold',
-    fontSize: 13,
+    fontSize: 14,
   },
-  materiCta: {
+  menuCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 8,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  menuRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: '#EFF6FF',
-    borderRadius: 14,
-    paddingVertical: 14,
-    borderWidth: 1,
-    borderColor: '#BFDBFE',
-    marginBottom: 12,
+    gap: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 8,
   },
-  materiCtaText: {
-    color: '#2563EB',
-    fontWeight: 'bold',
+  menuRowText: {
+    flex: 1,
     fontSize: 13,
+    fontWeight: '600',
+    color: '#334155',
   },
   errorText: {
     color: '#DC2626',

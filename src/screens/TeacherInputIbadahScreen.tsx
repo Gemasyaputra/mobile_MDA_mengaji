@@ -189,7 +189,8 @@ export default function TeacherInputIbadahScreen({ navigation }: any) {
           prayer_name: prayer,
           is_completed: true,
           quality: null,
-          notes: null
+          notes: null,
+          token: teacherToken
         };
         const res = await axios.post(`${API_URL}/api/worship-records`, payload);
         if (res.data.success) {

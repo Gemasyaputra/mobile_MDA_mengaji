@@ -78,7 +78,7 @@ export default function ParentKabarScreen({ navigation }: any) {
                   key={post.id}
                   style={styles.postCard}
                   activeOpacity={0.85}
-                  onPress={() => navigation.navigate('ParentKabarDetail', { id: post.id })}
+                  onPress={() => navigation.navigate('KabarDetail', { id: post.id })}
                 >
                   {images.length > 0 ? (
                     <View style={styles.imageWrapper}>
@@ -173,7 +173,7 @@ const styles = StyleSheet.create({
   },
   imageWrapper: {
     width: '100%',
-    height: 160,
+    aspectRatio: 4 / 3,
     backgroundColor: '#D1FAE5',
   },
   imagePlaceholder: {
@@ -220,7 +220,7 @@ const styles = StyleSheet.create({
   postExcerpt: {
     fontSize: 13,
     color: '#6B7280',
-    lineHeight: 18,
+    lineHeight: 20,
   },
   postAuthor: {
     fontSize: 11,

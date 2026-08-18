@@ -4,8 +4,20 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
 import { API_URL } from '../config/api';
+import { qualityBadgeColor } from '../utils/badgeColor';
 
 type Category = 'attendance' | 'learning' | 'memorization' | 'worship';
+
+const SALAT_FARDU_ORDER = ['Subuh', 'Dzuhur', 'Ashar', 'Maghrib', 'Isya'];
+
+// "doa bangun tidur" -> "Doa Bangun Tidur", tapi "Al-Fatihah" tetap "Al-Fatihah"
+// (tanda hubung/apostrof bukan bagian dari kelas karakter jadi tidak ikut di-lowercase-kan).
+function toTitleCase(str?: string | null): string {
+  if (!str) return '';
+  return str.replace(/[\wÀ-ÿ']+/g, (w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
+}
+
+const GENERIC_NOTE_PATTERN = /via (mobile )?app/i;
 
 const CATEGORIES: { key: Category; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
   { key: 'attendance', label: 'Kehadiran', icon: 'calendar-outline' },
@@ -80,17 +92,18 @@ export default function ParentHistoryScreen({ route, navigation }: any) {
   const renderRecord = (item: any) => {
     if (category === 'attendance') {
       const meta = ATTENDANCE_STATUS_META[item.status] || ATTENDANCE_STATUS_META.ALFA;
+      // Satu sinyal warna sudah cukup (badge di kanan) — catatan cuma ditampilkan
+      // kalau memang bukan keterangan umum ("diabsen via app"), mis. kalau guru
+      // menandai manual atau menulis alasan izin/sakit yang spesifik.
+      const hasNotableNote = item.notes && !GENERIC_NOTE_PATTERN.test(item.notes);
       return (
         <View key={item.id} style={styles.attendanceCard}>
-          <View style={[styles.attendanceIconWrap, { backgroundColor: meta.bg }]}>
-            <Ionicons name={meta.icon} size={22} color={meta.text} />
-          </View>
           <View style={styles.attendanceBody}>
             <Text style={styles.recordWeekday}>{formatWeekday(item.date)}</Text>
             <Text style={styles.attendanceDate}>{formatDate(item.date)}</Text>
-            {item.notes ? (
+            {hasNotableNote ? (
               <View style={styles.recordNoteRow}>
-                <Ionicons name="phone-portrait-outline" size={12} color="#9CA3AF" />
+                <Ionicons name="alert-circle-outline" size={12} color="#9CA3AF" />
                 <Text style={styles.recordNote}>{item.notes}</Text>
               </View>
             ) : null}
@@ -103,16 +116,31 @@ export default function ParentHistoryScreen({ route, navigation }: any) {
     }
 
     if (category === 'learning') {
+      const start = Number(item.start_point);
+      const end = Number(item.end_point);
+      const rangeText = Number.isFinite(start) && Number.isFinite(end)
+        ? `${Math.min(start, end)} - ${Math.max(start, end)}`
+        : `${item.start_point} - ${item.end_point}`;
       return (
         <View key={item.id} style={styles.recordCard}>
           <View style={styles.recordHeader}>
             <Text style={styles.recordDate}>{formatDate(item.date)}</Text>
-            <Text style={styles.badge}>{item.quality}</Text>
+            <Text style={[styles.badge, {
+              backgroundColor: qualityBadgeColor(item.quality).bg,
+              color: qualityBadgeColor(item.quality).fg,
+            }]}>
+              {item.quality}
+            </Text>
           </View>
           <Text style={styles.recordTitle}>{item.type === 'QURAN' ? 'Al-Qur\'an' : 'Iqro'} — {item.level_or_surah}</Text>
-          <Text style={styles.recordSub}>Halaman/Ayat: {item.start_point} - {item.end_point}</Text>
-          {item.teacher_name ? <Text style={styles.recordSub}>Guru: {item.teacher_name}</Text> : null}
+          <Text style={styles.recordSub}>Halaman/Ayat: {rangeText}</Text>
           {item.notes ? <Text style={styles.recordNote}>Catatan guru: {item.notes}</Text> : null}
+          {item.teacher_name ? (
+            <View style={styles.teacherRow}>
+              <Ionicons name="school-outline" size={12} color="#9CA3AF" />
+              <Text style={styles.teacherRowText}>{toTitleCase(item.teacher_name)}</Text>
+            </View>
+          ) : null}
         </View>
       );
     }
@@ -124,9 +152,14 @@ export default function ParentHistoryScreen({ route, navigation }: any) {
       <View key={item.id} style={styles.recordCard}>
         <View style={styles.recordHeader}>
           <Text style={styles.recordDate}>{formatDate(item.date)}</Text>
-          <Text style={styles.badge}>{item.quality}</Text>
+          <Text style={[styles.badge, {
+            backgroundColor: qualityBadgeColor(item.quality).bg,
+            color: qualityBadgeColor(item.quality).fg,
+          }]}>
+            {item.quality}
+          </Text>
         </View>
-        <Text style={styles.recordTitle}>{title || (item.type === 'BACAAN_SHOLAT' ? 'Bacaan Sholat' : 'Doa Harian')}</Text>
+        <Text style={styles.recordTitle}>{toTitleCase(title) || (item.type === 'BACAAN_SHOLAT' ? 'Bacaan Sholat' : 'Doa Harian')}</Text>
         <Text style={[styles.badgeInline, item.is_completed ? styles.bgSuccess : styles.bgWarning]}>
           {item.is_completed ? 'Lulus' : 'Belum Lulus'}
         </Text>
@@ -155,28 +188,57 @@ export default function ParentHistoryScreen({ route, navigation }: any) {
     return items;
   };
 
-  const renderSalatGroup = (group: { date: string; prayers: { name: string; recordedBy: string }[] }, idx: number) => (
-    <View key={`salat-${group.date}-${idx}`} style={styles.recordCard}>
-      <View style={styles.recordHeader}>
-        <Text style={styles.recordDate}>{formatDate(group.date)}</Text>
-        <Text style={styles.badge}>{group.prayers.length} Dicatat</Text>
+  const renderSalatGroup = (group: { date: string; prayers: { name: string; recordedBy: string }[] }, idx: number) => {
+    const recordedCount = group.prayers.length;
+    const isComplete = recordedCount >= SALAT_FARDU_ORDER.length;
+    return (
+      <View key={`salat-${group.date}-${idx}`} style={styles.recordCard}>
+        <View style={styles.recordHeader}>
+          <Text style={styles.recordDate}>{formatDate(group.date)}</Text>
+          <View style={styles.progressBadge}>
+            <Ionicons
+              name={isComplete ? 'checkmark-circle' : 'time-outline'}
+              size={14}
+              color={isComplete ? '#059669' : '#D97706'}
+            />
+            <Text style={[styles.progressBadgeText, { color: isComplete ? '#059669' : '#D97706' }]}>
+              {recordedCount}/{SALAT_FARDU_ORDER.length}
+            </Text>
+          </View>
+        </View>
+        <View style={styles.salatGrid}>
+          {SALAT_FARDU_ORDER.map((name) => {
+            const recorded = group.prayers.find((p) => p.name === name);
+            const byParent = recorded?.recordedBy === 'PARENT';
+            return (
+              <View
+                key={name}
+                style={[
+                  styles.salatCell,
+                  recorded && (byParent ? styles.salatCellParent : styles.salatCellDone),
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.salatCellLabel,
+                    recorded && (byParent ? styles.salatCellLabelParent : styles.salatCellLabelActive),
+                  ]}
+                  numberOfLines={1}
+                >
+                  {name}
+                </Text>
+                {recorded ? (
+                  <Ionicons name={byParent ? 'home' : 'school'} size={12} color={byParent ? '#B45309' : '#059669'} />
+                ) : (
+                  <View style={styles.salatCellDot} />
+                )}
+              </View>
+            );
+          })}
+        </View>
       </View>
-      <View style={styles.prayerChipRow}>
-        {group.prayers.map((p, i) => {
-          const byParent = p.recordedBy === 'PARENT';
-          return (
-            <View key={i} style={[styles.prayerChip, byParent && styles.prayerChipParent]}>
-              <Ionicons name="checkmark-circle" size={12} color={byParent ? '#B45309' : '#059669'} />
-              <Text style={[styles.prayerChipText, byParent && styles.prayerChipTextParent]}>{p.name}</Text>
-              <Text style={[styles.prayerChipSource, byParent && styles.prayerChipSourceParent]}>
-                {byParent ? 'Ortu' : 'Guru'}
-              </Text>
-            </View>
-          );
-        })}
-      </View>
-    </View>
-  );
+    );
+  };
 
   const renderEmptyState = () => {
     const activeCategory = CATEGORIES.find((c) => c.key === category);
@@ -344,7 +406,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
-    padding: 12,
+    paddingVertical: 16,
+    paddingHorizontal: 16,
     marginBottom: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
@@ -352,26 +415,18 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 2,
   },
-  attendanceIconWrap: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
   attendanceBody: {
     flex: 1,
   },
   recordWeekday: {
-    fontSize: 14,
+    fontSize: 17,
     fontWeight: 'bold',
     color: '#111827',
   },
   attendanceDate: {
-    fontSize: 12,
+    fontSize: 13,
     color: '#6B7280',
-    marginTop: 1,
+    marginTop: 2,
   },
   recordNoteRow: {
     flexDirection: 'row',
@@ -428,6 +483,17 @@ const styles = StyleSheet.create({
     color: '#9CA3AF',
     fontStyle: 'italic',
   },
+  teacherRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 6,
+  },
+  teacherRowText: {
+    fontSize: 11,
+    color: '#9CA3AF',
+    fontWeight: '600',
+  },
   badge: {
     fontSize: 12,
     color: '#059669',
@@ -452,48 +518,54 @@ const styles = StyleSheet.create({
   bgSuccess: {
     backgroundColor: '#10B981',
   },
-  prayerChipRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginTop: 4,
-  },
-  prayerChip: {
+  progressBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: '#ECFDF5',
-    borderWidth: 1,
-    borderColor: '#A7F3D0',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 20,
   },
-  prayerChipText: {
+  progressBadgeText: {
     fontSize: 13,
+    fontWeight: 'bold',
+  },
+  salatGrid: {
+    flexDirection: 'row',
+    gap: 6,
+    marginTop: 4,
+  },
+  salatCell: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    paddingVertical: 8,
+    borderRadius: 12,
+  },
+  salatCellLabel: {
+    fontSize: 11,
     fontWeight: '600',
+    color: '#94A3B8',
+  },
+  salatCellLabelActive: {
     color: '#065F46',
   },
-  prayerChipParent: {
+  salatCellLabelParent: {
+    color: '#92400E',
+  },
+  salatCellDone: {
+    backgroundColor: '#ECFDF5',
+    borderColor: '#A7F3D0',
+  },
+  salatCellParent: {
     backgroundColor: '#FFFBEB',
     borderColor: '#FDE68A',
   },
-  prayerChipTextParent: {
-    color: '#92400E',
-  },
-  prayerChipSource: {
-    fontSize: 9,
-    fontWeight: 'bold',
-    color: '#059669',
-    backgroundColor: '#D1FAE5',
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-    borderRadius: 6,
-    overflow: 'hidden',
-  },
-  prayerChipSourceParent: {
-    color: '#B45309',
-    backgroundColor: '#FEF3C7',
+  salatCellDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: '#CBD5E1',
   },
   bgWarning: {
     backgroundColor: '#F59E0B',

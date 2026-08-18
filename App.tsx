@@ -14,7 +14,7 @@ import TeacherInputHafalanScreen from './src/screens/TeacherInputHafalanScreen';
 import TeacherInputIbadahScreen from './src/screens/TeacherInputIbadahScreen';
 import ParentQRLoginScreen from './src/screens/ParentQRLoginScreen';
 import ParentHistoryScreen from './src/screens/ParentHistoryScreen';
-import ParentKabarDetailScreen from './src/screens/ParentKabarDetailScreen';
+import KabarDetailScreen from './src/screens/KabarDetailScreen';
 import ParentInputSalatScreen from './src/screens/ParentInputSalatScreen';
 import ParentBankMateriScreen from './src/screens/ParentBankMateriScreen';
 import ParentMateriDetailScreen from './src/screens/ParentMateriDetailScreen';
@@ -34,7 +34,7 @@ const linking: LinkingOptions<any> = {
   prefixes: [Linking.createURL('/'), 'mdamengaji://'],
   config: {
     screens: {
-      ParentKabarDetail: 'kabar/:id',
+      KabarDetail: 'kabar/:id',
     },
   },
 };
@@ -91,8 +91,8 @@ export default function App() {
           options={{ headerShown: false }}
         />
         <Stack.Screen
-          name="ParentKabarDetail"
-          component={ParentKabarDetailScreen}
+          name="KabarDetail"
+          component={KabarDetailScreen}
           options={{ headerShown: false }}
         />
         <Stack.Screen

@@ -1,5 +1,5 @@
 ﻿import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, StatusBar, ActivityIndicator, TextInput, Platform, Modal, FlatList, Image } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, StatusBar, ActivityIndicator, TextInput, Platform, Modal, FlatList, Image, KeyboardAvoidingView } from 'react-native';
 import { CustomAlert } from '../components/CustomAlert';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -191,7 +191,8 @@ export default function TeacherInputHafalanScreen({ navigation }: any) {
         prayer_reading_id: type === 'BACAAN_SHOLAT' ? selectedItem.id : null,
         is_completed: isCompleted,
         quality: quality,
-        notes: notes
+        notes: notes,
+        token: teacherToken
       };
 
       const res = await axios.post(`${API_URL}/api/worship-records`, payload);
@@ -237,8 +238,9 @@ export default function TeacherInputHafalanScreen({ navigation }: any) {
         <View style={{ width: 24 }} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+
         {step === 1 && (
           <View>
             <Text style={styles.sectionTitle}>Pilih Kelas Anda:</Text>
@@ -458,7 +460,7 @@ export default function TeacherInputHafalanScreen({ navigation }: any) {
               </View>
 
               <View style={styles.formGroup}>
-                <Text style={styles.label}>Catatan (Opsional)</Text>
+                <Text style={styles.label}>Catatan</Text>
                 <TextInput 
                   style={[styles.input, styles.textArea]} 
                   value={notes}
@@ -500,6 +502,7 @@ export default function TeacherInputHafalanScreen({ navigation }: any) {
           </View>
         )}
       </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -529,7 +532,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: 20,
-    paddingBottom: 40,
+    paddingBottom: 280,
   },
   sectionTitle: {
     fontSize: 16,

@@ -21,7 +21,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_URL } from '../config/api';
 import { handleTeacherAuthError } from '../utils/authError';
 
-const CONTENT_MAX_LENGTH = 1000;
+const CONTENT_MAX_LENGTH = 5000;
 
 async function compressToDataUri(uri: string): Promise<string> {
   const context = ImageManipulator.manipulate(uri);

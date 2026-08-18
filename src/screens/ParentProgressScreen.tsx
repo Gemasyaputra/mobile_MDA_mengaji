@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
 import { API_URL } from '../config/api';
 import AttendanceBarChart, { AttendanceChartPoint } from '../components/AttendanceBarChart';
+import { qualityBadgeColor } from '../utils/badgeColor';
 
 function formatDate(dateStr: string) {
   try {
@@ -194,7 +195,14 @@ export default function ParentProgressScreen({ route, navigation }: any) {
                 </Text>
               )}
             </View>
-            {data?.latestLearning && <Text style={styles.activityBadge}>{data.latestLearning.quality}</Text>}
+            {data?.latestLearning && (
+              <Text style={[styles.activityBadge, {
+                backgroundColor: qualityBadgeColor(data.latestLearning.quality).bg,
+                color: qualityBadgeColor(data.latestLearning.quality).fg,
+              }]}>
+                {data.latestLearning.quality}
+              </Text>
+            )}
             <Ionicons name="chevron-forward" size={16} color="#D1D5DB" />
           </TouchableOpacity>
 
@@ -214,7 +222,14 @@ export default function ParentProgressScreen({ route, navigation }: any) {
                 </Text>
               )}
             </View>
-            {data?.latestHafalan && <Text style={styles.activityBadge}>{data.latestHafalan.quality}</Text>}
+            {data?.latestHafalan && (
+              <Text style={[styles.activityBadge, {
+                backgroundColor: qualityBadgeColor(data.latestHafalan.quality).bg,
+                color: qualityBadgeColor(data.latestHafalan.quality).fg,
+              }]}>
+                {data.latestHafalan.quality}
+              </Text>
+            )}
             <Ionicons name="chevron-forward" size={16} color="#D1D5DB" />
           </TouchableOpacity>
 

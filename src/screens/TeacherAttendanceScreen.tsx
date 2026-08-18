@@ -104,7 +104,9 @@ export default function TeacherAttendanceScreen({ navigation }: any) {
       const effectiveDate = dateOverride || date;
       const res = await axios.get(`${API_URL}/api/mobile/teacher/attendance/list?token=${encodeURIComponent(teacherToken)}&groupId=${groupId}&session=${activeSession}&date=${effectiveDate}`);
       if (res.data.success) {
-        setStudents(res.data.data);
+        // originalStatus menandai presensi yang SUDAH tersimpan di server untuk sesi aktif,
+        // dipakai untuk menampilkan tombol hapus (bedanya dengan tap lokal yang belum disimpan).
+        setStudents(res.data.data.map((s: any) => ({ ...s, originalStatus: s.status || null })));
       }
     } catch (err) {
       const handled = await handleTeacherAuthError(err, navigation);
@@ -227,9 +229,13 @@ export default function TeacherAttendanceScreen({ navigation }: any) {
   };
 
   const updateStatus = (id: number, status: string) => {
-    setStudents(students.map(student =>
-      student.id === id ? { ...student, status: student.status === status ? null : status } : student
-    ));
+    setStudents(students.map(student => {
+      if (student.id !== id) return student;
+      // Santri yang sudah tercatat di sesi lain hari ini terkunci — tidak boleh ditandai lagi
+      // di sesi yang sedang dibuka supaya tidak dobel per hari.
+      if (student.otherSessions && student.otherSessions.length > 0) return student;
+      return { ...student, status: student.status === status ? null : status };
+    }));
   };
 
   // Santri yang sudah tercatat di sesi lain hari ini sudah "beres" untuk hari itu — jangan
@@ -239,7 +245,9 @@ export default function TeacherAttendanceScreen({ navigation }: any) {
   const saveAttendance = async () => {
     if (!teacherToken || students.length === 0) return;
 
-    const markedStudents = students.filter(s => s.status);
+    // Santri terkunci (sudah tercatat di sesi lain hari ini) tidak boleh ikut terkirim,
+    // meski status-nya ter-set dari state lama.
+    const markedStudents = students.filter(s => s.status && !(s.otherSessions && s.otherSessions.length > 0));
     const unmarkedStudents = students.filter(needsMarking);
     const unmarkedCount = unmarkedStudents.length;
 
@@ -281,7 +289,16 @@ export default function TeacherAttendanceScreen({ navigation }: any) {
       const res = await axios.post(`${API_URL}/api/mobile/teacher/attendance`, payload);
 
       if (res.data.success) {
-        CustomAlert.alert('Sukses', 'Presensi berhasil disimpan!');
+        const skippedCount = (res.data.skipped || []).length;
+        if (skippedCount > 0) {
+          CustomAlert.alert(
+            'Sebagian dilewati',
+            `Presensi tersimpan. ${skippedCount} santri dilewati karena sudah tercatat di sesi lain hari ini.`
+          );
+        } else {
+          CustomAlert.alert('Sukses', 'Presensi berhasil disimpan!');
+        }
+        if (selectedClass) fetchStudents(selectedClass.id, session, date);
       } else {
         CustomAlert.alert('Gagal', res.data.message || 'Gagal menyimpan presensi');
       }
@@ -294,6 +311,51 @@ export default function TeacherAttendanceScreen({ navigation }: any) {
     } finally {
       setSaving(false);
     }
+  };
+
+  // Hapus presensi tersimpan seorang santri untuk tanggal ini (di sesi manapun dia tercatat),
+  // supaya guru bisa membetulkan salah input (salah status atau salah sesi) dengan input ulang.
+  const deleteAttendance = (student: any) => {
+    const recordedSession = student.originalStatus
+      ? session
+      : (student.otherSessions && student.otherSessions[0]?.session);
+    const recordedStatus = student.originalStatus || (student.otherSessions && student.otherSessions[0]?.status);
+    const sessionLabel = recordedSession === 'SIANG' ? 'Siang' : recordedSession === 'SORE' ? 'Sore' : 'Pagi';
+
+    CustomAlert.alert(
+      'Hapus Presensi?',
+      `Hapus presensi ${student.name} (${STATUS_LABEL[recordedStatus] || recordedStatus} - sesi ${sessionLabel}) untuk tanggal ini? Santri bisa ditandai ulang setelah dihapus.`,
+      [
+        { text: 'Batal', style: 'cancel' },
+        {
+          text: 'Hapus',
+          style: 'destructive',
+          onPress: async () => {
+            if (!teacherToken) return;
+            try {
+              setSaving(true);
+              const res = await axios.post(`${API_URL}/api/mobile/teacher/attendance`, [
+                { studentId: student.id, token: teacherToken, date, action: 'delete' },
+              ]);
+              if (res.data.success) {
+                CustomAlert.alert('Sukses', 'Presensi berhasil dihapus.');
+                if (selectedClass) fetchStudents(selectedClass.id, session, date);
+              } else {
+                CustomAlert.alert('Gagal', res.data.message || 'Gagal menghapus presensi');
+              }
+            } catch (err) {
+              const handled = await handleTeacherAuthError(err, navigation);
+              if (!handled) {
+                console.log('Error deleting attendance', err);
+                CustomAlert.alert('Error', 'Terjadi kesalahan saat menghapus presensi');
+              }
+            } finally {
+              setSaving(false);
+            }
+          },
+        },
+      ]
+    );
   };
 
   if (loading && !selectedClass && mode === 'input') {
@@ -352,57 +414,46 @@ export default function TeacherAttendanceScreen({ navigation }: any) {
             const dateStr = new Date(item.date).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'short' });
             const sessions = (item.sessions || []) as { session: string; total_attendance: number; total_hadir: number }[];
             const hadirFor = (name: string) => sessions.find((s) => s.session === name)?.total_hadir ?? null;
+            // Cuma tampilkan sesi yang memang ada catatannya — sesi kosong ("Siang: -")
+            // cuma noise kalau MDA ini memang tidak pernah beroperasi di jam itu.
+            const activeSessions = (['PAGI', 'SIANG', 'SORE'] as const)
+              .map((name) => ({ name, label: name === 'PAGI' ? 'Pagi' : name === 'SIANG' ? 'Siang' : 'Sore', hadir: hadirFor(name) }))
+              .filter((s) => s.hadir !== null);
             const nonHadir = [
-              { label: 'Alfa', count: Number(item.total_alfa || 0), color: '#EF4444' },
-              { label: 'Sakit', count: Number(item.total_sakit || 0), color: '#F59E0B' },
-              { label: 'Izin', count: Number(item.total_izin || 0), color: '#3B82F6' },
+              { label: 'Alfa', count: Number(item.total_alfa || 0) },
+              { label: 'Sakit', count: Number(item.total_sakit || 0) },
+              { label: 'Izin', count: Number(item.total_izin || 0) },
             ].filter((s) => s.count > 0);
 
             return (
               <TouchableOpacity key={idx} style={styles.historyItemCard} activeOpacity={0.7} onPress={() => openDayDetail(item)}>
                 <View style={styles.historyItemHeader}>
-                  <View>
+                  <View style={{ flex: 1 }}>
                     <Text style={styles.historyDateText}>{dateStr}</Text>
-                    <Text style={styles.historySubText}>{item.group_name || 'Tanpa Kelas'} • {item.teacher_name || 'Guru'}</Text>
+                    {/* Nama kelas cuma perlu ditampilkan kalau filter "Semua" aktif — kalau
+                        satu kelas spesifik sudah dipilih di atas, ini cuma pengulangan.
+                        Nama guru dihapus total: guru sedang lihat riwayatnya sendiri. */}
+                    {!filterGroupId && (
+                      <Text style={styles.historySubText}>{item.group_name || 'Tanpa Kelas'}</Text>
+                    )}
                   </View>
                   <Feather name="chevron-right" size={18} color="#CBD5E1" />
                 </View>
 
-                <Text style={styles.totalSantriText}>Total Santri: {totalSantri}</Text>
-
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
-                  {(['PAGI', 'SIANG', 'SORE'] as const).map((name) => {
-                    const hadir = hadirFor(name);
-                    const label = name === 'PAGI' ? 'Pagi' : name === 'SIANG' ? 'Siang' : 'Sore';
-                    return (
-                      <View
-                        key={name}
-                        style={[
-                          styles.sessionBadge,
-                          name === 'SIANG' && styles.sessionBadgeSiang,
-                          name === 'SORE' && styles.sessionBadgeSore,
-                        ]}
-                      >
-                        <Text
-                          style={[
-                            styles.sessionBadgeText,
-                            name === 'SIANG' && styles.sessionBadgeTextSiang,
-                            name === 'SORE' && styles.sessionBadgeTextSore,
-                          ]}
-                        >
-                          {label}: {hadir !== null ? `${hadir}/${totalSantri}` : '-'}
-                        </Text>
-                      </View>
-                    );
-                  })}
+                <View style={styles.sessionRow}>
+                  {activeSessions.map((s) => (
+                    <View key={s.name} style={styles.sessionBadge}>
+                      <Text style={styles.sessionBadgeText}>{s.label}: {s.hadir}/{totalSantri}</Text>
+                    </View>
+                  ))}
                 </View>
 
-                {nonHadir.length > 0 && (
-                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
-                    {nonHadir.map((s) => (
-                      <Text key={s.label} style={[styles.nonHadirText, { color: s.color }]}>{s.label}: {s.count}</Text>
-                    ))}
-                  </View>
+                {nonHadir.length === 0 ? (
+                  activeSessions.length > 0 && <Text style={styles.allPresentText}>Semua Hadir</Text>
+                ) : (
+                  <Text style={styles.nonHadirText}>
+                    {nonHadir.map((s) => `${s.label} ${s.count}`).join(' · ')}
+                  </Text>
                 )}
               </TouchableOpacity>
             );
@@ -431,7 +482,16 @@ export default function TeacherAttendanceScreen({ navigation }: any) {
           {detailLoading ? (
             <ActivityIndicator size="large" color="#059669" style={{ marginVertical: 30 }} />
           ) : (
-            <ScrollView style={{ maxHeight: 420 }}>
+            <>
+              <View style={styles.detailColumnHeaderRow}>
+                <View style={{ flex: 1 }} />
+                <View style={{ flexDirection: 'row', gap: 6 }}>
+                  {['Pagi', 'Siang', 'Sore'].map((label) => (
+                    <Text key={label} style={styles.detailColumnHeaderText}>{label}</Text>
+                  ))}
+                </View>
+              </View>
+              <ScrollView style={{ maxHeight: 420 }}>
               {detailStudents.map((student) => {
                 const statuses = studentSessionStatuses(student);
                 return (
@@ -453,7 +513,8 @@ export default function TeacherAttendanceScreen({ navigation }: any) {
                   </View>
                 );
               })}
-            </ScrollView>
+              </ScrollView>
+            </>
           )}
 
           <View style={styles.detailLegendRow}>
@@ -613,35 +674,49 @@ export default function TeacherAttendanceScreen({ navigation }: any) {
                   )}
                 </View>
 
-                <View style={styles.statusButtonsRow}>
-                  <TouchableOpacity 
-                    style={[styles.statusBtn, student.status === 'HADIR' && styles.statusBtnActiveHadir]}
-                    onPress={() => updateStatus(student.id, 'HADIR')}
-                  >
-                    <Text style={[styles.statusBtnText, student.status === 'HADIR' && styles.statusBtnTextActive]}>H</Text>
+                {student.otherSessions && student.otherSessions.length > 0 ? (
+                  <TouchableOpacity style={styles.lockedBadge} onPress={() => deleteAttendance(student)}>
+                    <Feather name="lock" size={11} color="#94A3B8" />
+                    <Text style={styles.lockedBadgeText}>Terkunci</Text>
                   </TouchableOpacity>
-                  
-                  <TouchableOpacity 
-                    style={[styles.statusBtn, student.status === 'SAKIT' && styles.statusBtnActiveSakit]}
-                    onPress={() => updateStatus(student.id, 'SAKIT')}
-                  >
-                    <Text style={[styles.statusBtnText, student.status === 'SAKIT' && styles.statusBtnTextActive]}>S</Text>
-                  </TouchableOpacity>
-                  
-                  <TouchableOpacity 
-                    style={[styles.statusBtn, student.status === 'IZIN' && styles.statusBtnActiveIzin]}
-                    onPress={() => updateStatus(student.id, 'IZIN')}
-                  >
-                    <Text style={[styles.statusBtnText, student.status === 'IZIN' && styles.statusBtnTextActive]}>I</Text>
-                  </TouchableOpacity>
-                  
-                  <TouchableOpacity 
-                    style={[styles.statusBtn, student.status === 'ALFA' && styles.statusBtnActiveAlfa]}
-                    onPress={() => updateStatus(student.id, 'ALFA')}
-                  >
-                    <Text style={[styles.statusBtnText, student.status === 'ALFA' && styles.statusBtnTextActive]}>A</Text>
-                  </TouchableOpacity>
-                </View>
+                ) : (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <View style={styles.statusButtonsRow}>
+                    <TouchableOpacity
+                      style={[styles.statusBtn, student.status === 'HADIR' && styles.statusBtnActiveHadir]}
+                      onPress={() => updateStatus(student.id, 'HADIR')}
+                    >
+                      <Text style={[styles.statusBtnText, student.status === 'HADIR' && styles.statusBtnTextActive]}>H</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[styles.statusBtn, student.status === 'SAKIT' && styles.statusBtnActiveSakit]}
+                      onPress={() => updateStatus(student.id, 'SAKIT')}
+                    >
+                      <Text style={[styles.statusBtnText, student.status === 'SAKIT' && styles.statusBtnTextActive]}>S</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[styles.statusBtn, student.status === 'IZIN' && styles.statusBtnActiveIzin]}
+                      onPress={() => updateStatus(student.id, 'IZIN')}
+                    >
+                      <Text style={[styles.statusBtnText, student.status === 'IZIN' && styles.statusBtnTextActive]}>I</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[styles.statusBtn, student.status === 'ALFA' && styles.statusBtnActiveAlfa]}
+                      onPress={() => updateStatus(student.id, 'ALFA')}
+                    >
+                      <Text style={[styles.statusBtnText, student.status === 'ALFA' && styles.statusBtnTextActive]}>A</Text>
+                    </TouchableOpacity>
+                  </View>
+                  {student.originalStatus && (
+                    <TouchableOpacity style={styles.deleteIconBtn} onPress={() => deleteAttendance(student)}>
+                      <Feather name="trash-2" size={16} color="#EF4444" />
+                    </TouchableOpacity>
+                  )}
+                  </View>
+                )}
               </View>
             ))}
           </View>
@@ -959,6 +1034,28 @@ const styles = StyleSheet.create({
   statusBtnTextActive: {
     color: '#fff',
   },
+  deleteIconBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    backgroundColor: '#FEF2F2',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  lockedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: '#F1F5F9',
+  },
+  lockedBadgeText: {
+    fontSize: 11,
+    fontWeight: 'bold',
+    color: '#94A3B8',
+  },
   saveBtn: {
     backgroundColor: '#059669',
     padding: 15,
@@ -1102,9 +1199,10 @@ const styles = StyleSheet.create({
   },
   historyItemCard: {
     backgroundColor: '#fff',
-    padding: 15,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
     borderRadius: 12,
-    marginBottom: 12,
+    marginBottom: 8,
     borderWidth: 1,
     borderColor: '#F1F5F9',
   },
@@ -1118,15 +1216,17 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#1E293B',
   },
-  totalSantriText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#334155',
-    marginTop: 10,
-  },
   nonHadirText: {
     fontSize: 11,
+    fontWeight: '600',
+    color: '#94A3B8',
+    marginTop: 6,
+  },
+  allPresentText: {
+    fontSize: 11,
     fontWeight: '700',
+    color: '#059669',
+    marginTop: 6,
   },
   modalOverlay: {
     flex: 1,
@@ -1150,6 +1250,20 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     color: '#1E293B',
+  },
+  detailColumnHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  detailColumnHeaderText: {
+    width: 26,
+    fontSize: 8,
+    lineHeight: 11,
+    fontWeight: 'bold',
+    color: '#94A3B8',
+    textAlign: 'center',
+    textTransform: 'uppercase',
   },
   detailStudentRow: {
     flexDirection: 'row',
@@ -1193,11 +1307,17 @@ const styles = StyleSheet.create({
     color: '#64748B',
     marginTop: 2,
   },
+  sessionRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 8,
+  },
   sessionBadge: {
     paddingHorizontal: 8,
-    paddingVertical: 2,
+    paddingVertical: 3,
     borderRadius: 10,
-    backgroundColor: '#DBEAFE',
+    backgroundColor: '#F0FDF4',
   },
   sessionBadgeSiang: {
     backgroundColor: '#FEF3C7',
@@ -1206,9 +1326,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#EDE9FE',
   },
   sessionBadgeText: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: 'bold',
-    color: '#1D4ED8',
+    color: '#059669',
   },
   sessionBadgeTextSiang: {
     color: '#B45309',

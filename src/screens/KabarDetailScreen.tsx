@@ -13,8 +13,10 @@ import {
   StatusBar,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_URL, PUBLIC_WEB_URL } from '../config/api';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -27,7 +29,7 @@ function formatDate(dateStr: string) {
   }
 }
 
-export default function ParentKabarDetailScreen({ route, navigation }: any) {
+export default function KabarDetailScreen({ route, navigation }: any) {
   const { id } = route.params;
 
   const [loading, setLoading] = useState(true);
@@ -38,6 +40,7 @@ export default function ParentKabarDetailScreen({ route, navigation }: any) {
   const [viewerVisible, setViewerVisible] = useState(false);
   const [viewerIndex, setViewerIndex] = useState(0);
   const viewerScrollRef = useRef<ScrollView>(null);
+  const [teacherId, setTeacherId] = useState<number | null>(null);
 
   useEffect(() => {
     if (viewerVisible) {
@@ -48,8 +51,26 @@ export default function ParentKabarDetailScreen({ route, navigation }: any) {
   }, [viewerVisible]);
 
   useEffect(() => {
-    fetchDetail();
-  }, [id]);
+    const loadTeacherId = async () => {
+      try {
+        const token = await AsyncStorage.getItem('teacher_token');
+        if (!token) return;
+        const res = await axios.get(`${API_URL}/api/mobile/teacher/me?token=${encodeURIComponent(token)}`);
+        if (res.data.success) setTeacherId(res.data.data.id);
+      } catch (err) {
+        // Bukan sesi guru (mis. dibuka sebagai orang tua) — biarkan saja, tombol Edit tidak akan tampil.
+      }
+    };
+    loadTeacherId();
+  }, []);
+
+  // Refetch tiap kali layar ini kembali fokus (mis. setelah kembali dari layar Edit)
+  // supaya perubahan langsung terlihat tanpa perlu keluar-masuk manual.
+  useFocusEffect(
+    React.useCallback(() => {
+      fetchDetail();
+    }, [id])
+  );
 
   const fetchDetail = async () => {
     try {
@@ -83,6 +104,7 @@ export default function ParentKabarDetailScreen({ route, navigation }: any) {
   };
 
   const images: string[] = post && Array.isArray(post.images) ? post.images : [];
+  const isOwner = teacherId !== null && post && Number(post.author_id) === teacherId;
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -91,9 +113,19 @@ export default function ParentKabarDetailScreen({ route, navigation }: any) {
           <Ionicons name="arrow-back" size={22} color="#FFFFFF" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Detail Kabar</Text>
-        <TouchableOpacity onPress={handleShare} style={styles.backButton} disabled={!post}>
-          <Ionicons name="share-social" size={20} color="#FFFFFF" />
-        </TouchableOpacity>
+        <View style={styles.headerActions}>
+          {isOwner && (
+            <TouchableOpacity
+              onPress={() => navigation.navigate('TeacherKabarForm', { post: { ...post, images } })}
+              style={styles.backButton}
+            >
+              <Ionicons name="create-outline" size={20} color="#FFFFFF" />
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity onPress={handleShare} style={styles.backButton} disabled={!post}>
+            <Ionicons name="share-social" size={20} color="#FFFFFF" />
+          </TouchableOpacity>
+        </View>
       </View>
 
       {loading ? (
@@ -221,6 +253,11 @@ const styles = StyleSheet.create({
   },
   backButton: {
     padding: 4,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
   },
   headerTitle: {
     fontSize: 18,

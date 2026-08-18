@@ -93,7 +93,7 @@ export default function ParentQRLoginScreen({ navigation }: any) {
           type: 'image/jpeg'
         } as any);
 
-        const response = await axios.post('http://api.qrserver.com/v1/read-qr-code/', formData, {
+        const response = await axios.post('https://api.qrserver.com/v1/read-qr-code/', formData, {
           headers: { 'Content-Type': 'multipart/form-data' }
         });
 

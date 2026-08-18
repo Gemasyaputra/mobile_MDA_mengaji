@@ -4,6 +4,7 @@ import { CustomAlert } from '../components/CustomAlert';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_URL } from '../config/api';
 
 function formatDate(dateStr: string | null | undefined) {
@@ -23,12 +24,14 @@ export default function TeacherSantriDetailScreen({ route, navigation }: any) {
   const [learningHistory, setLearningHistory] = useState<any[]>([]);
   const [attendanceHistory, setAttendanceHistory] = useState<any[]>([]);
   const [upgrading, setUpgrading] = useState(false);
+  const [downgrading, setDowngrading] = useState(false);
 
   const fetchAll = useCallback(async () => {
     try {
       setLoading(true);
+      const token = await AsyncStorage.getItem('teacher_token');
       const [studentRes, learningRes, attendanceRes] = await Promise.all([
-        axios.get(`${API_URL}/api/students?id=${studentId}`),
+        axios.get(`${API_URL}/api/students?id=${studentId}&token=${encodeURIComponent(token || '')}`),
         axios.get(`${API_URL}/api/learning-records?student_id=${studentId}&limit=10`),
         axios.get(`${API_URL}/api/attendance?student_id=${studentId}`),
       ]);
@@ -65,7 +68,8 @@ export default function TeacherSantriDetailScreen({ route, navigation }: any) {
           onPress: async () => {
             try {
               setUpgrading(true);
-              const res = await axios.patch(`${API_URL}/api/students/${studentId}/upgrade`);
+              const token = await AsyncStorage.getItem('teacher_token');
+              const res = await axios.patch(`${API_URL}/api/students/${studentId}/upgrade?token=${encodeURIComponent(token || '')}`);
               if (res.data.success) {
                 setStudent((prev: any) => ({ ...prev, reading_level: 'ALQURAN' }));
               } else {
@@ -76,6 +80,37 @@ export default function TeacherSantriDetailScreen({ route, navigation }: any) {
               CustomAlert.alert('Error', 'Terjadi kesalahan.');
             } finally {
               setUpgrading(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleDowngrade = async () => {
+    CustomAlert.alert(
+      'Batalkan Status Khatam',
+      `Batalkan status khatam santri ${student?.name}? Santri akan kembali berstatus Iqro.`,
+      [
+        { text: 'Batal', style: 'cancel' },
+        {
+          text: 'Ya, Batalkan',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setDowngrading(true);
+              const token = await AsyncStorage.getItem('teacher_token');
+              const res = await axios.patch(`${API_URL}/api/students/${studentId}/downgrade?token=${encodeURIComponent(token || '')}`);
+              if (res.data.success) {
+                setStudent((prev: any) => ({ ...prev, reading_level: 'IQRO' }));
+              } else {
+                CustomAlert.alert('Gagal', 'Gagal membatalkan status khatam santri.');
+              }
+            } catch (err) {
+              console.error(err);
+              CustomAlert.alert('Error', 'Terjadi kesalahan.');
+            } finally {
+              setDowngrading(false);
             }
           },
         },
@@ -154,7 +189,18 @@ export default function TeacherSantriDetailScreen({ route, navigation }: any) {
               {student.reading_level === 'ALQURAN' ? '📖 Al-Quran' : '📚 Iqro'}
             </Text>
           </View>
-          {student.current_level ? <Text style={styles.profileSub}>{student.current_level}</Text> : null}
+          {student.current_level && student.reading_level !== 'ALQURAN' ? (
+            <Text style={styles.profileSub}>{student.current_level}</Text>
+          ) : null}
+          {student.reading_level === 'ALQURAN' && (
+            <TouchableOpacity onPress={handleDowngrade} disabled={downgrading} style={styles.undoKhatamLink}>
+              {downgrading ? (
+                <ActivityIndicator size="small" color="#94A3B8" />
+              ) : (
+                <Text style={styles.undoKhatamLinkText}>↺ Salah konfirmasi? Batalkan khatam</Text>
+              )}
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* Stats */}
@@ -289,6 +335,8 @@ const styles = StyleSheet.create({
   levelBadge: { backgroundColor: '#DBEAFE', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 20 },
   levelBadgeText: { color: '#2563EB', fontWeight: 'bold', fontSize: 13 },
   profileSub: { fontSize: 12, color: '#64748B', marginTop: 6 },
+  undoKhatamLink: { marginTop: 10, padding: 4 },
+  undoKhatamLinkText: { fontSize: 12, color: '#94A3B8', fontWeight: '600', textDecorationLine: 'underline' },
   statsRow: { flexDirection: 'row', gap: 12, marginBottom: 16 },
   statTile: { flex: 1, borderRadius: 14, padding: 16, alignItems: 'center' },
   statValue: { fontSize: 24, fontWeight: '900' },

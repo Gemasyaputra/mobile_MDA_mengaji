@@ -1,6 +1,5 @@
 ﻿import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, StatusBar, ActivityIndicator, RefreshControl, Modal } from 'react-native';
-import { CustomAlert } from '../components/CustomAlert';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { Feather, MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
@@ -27,6 +26,29 @@ const MDA_LAT = -0.9379844;
 const MDA_LNG = 100.4335174;
 const MDA_NAME = 'Masjid Nurul Huda';
 
+function getNextPrayerCountdown(prayerTimes: { name: string; time: string }[], now: Date) {
+  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+  for (const p of prayerTimes) {
+    const [h, m] = p.time.split(':').map(Number);
+    if (Number.isFinite(h) && Number.isFinite(m)) {
+      const t = h * 60 + m;
+      if (t >= nowMinutes) {
+        return { name: p.name, minutesLeft: t - nowMinutes };
+      }
+    }
+  }
+  // Semua waktu hari ini sudah lewat -> hitung mundur ke Subuh besok.
+  const [h, m] = prayerTimes[0].time.split(':').map(Number);
+  const minutesLeft = Number.isFinite(h) && Number.isFinite(m) ? (24 * 60 - nowMinutes) + (h * 60 + m) : 0;
+  return { name: prayerTimes[0].name, minutesLeft };
+}
+
+function formatCountdown(minutesLeft: number) {
+  const h = Math.floor(minutesLeft / 60);
+  const m = minutesLeft % 60;
+  return h > 0 ? `${h}j ${m}m` : `${m}m`;
+}
+
 export default function TeacherHome({ navigation }: any) {
   const insets = useSafeAreaInsets();
   
@@ -50,7 +72,8 @@ export default function TeacherHome({ navigation }: any) {
   const [attendanceDetailLoading, setAttendanceDetailLoading] = useState(false);
   const [attendanceDetailClasses, setAttendanceDetailClasses] = useState<any[]>([]);
 
-  // For Real-time Clock
+  // Jam cukup diperbarui tiap menit — dipakai untuk hitung waktu sholat berikutnya,
+  // bukan buat ditampilkan sampai ke detik (boros re-render & baterai tanpa manfaat).
   const [currentTime, setCurrentTime] = useState(new Date());
   const [locationName, setLocationName] = useState(`📍 ${MDA_NAME} (Default)`);
   const [locationRefreshing, setLocationRefreshing] = useState(false);
@@ -142,7 +165,7 @@ export default function TeacherHome({ navigation }: any) {
 
     const timer = setInterval(() => {
       setCurrentTime(new Date());
-    }, 1000);
+    }, 60000);
     return () => clearInterval(timer);
   }, []);
 
@@ -275,80 +298,81 @@ export default function TeacherHome({ navigation }: any) {
                 </View>
               </View>
               <View style={{ alignItems: 'flex-end' }}>
-                <Text style={styles.countdownText}>
-                  {currentTime.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }).replace(/\./g, ':')}
-                </Text>
+                {(() => {
+                  const next = getNextPrayerCountdown(prayerTimes, currentTime);
+                  return (
+                    <>
+                      <Text style={styles.menujuText}>
+                        Menuju {next.name.charAt(0) + next.name.slice(1).toLowerCase()}
+                      </Text>
+                      <Text style={styles.countdownText}>{formatCountdown(next.minutesLeft)}</Text>
+                    </>
+                  );
+                })()}
               </View>
             </View>
-            
-            <View style={styles.sholatBubbles}>
-              {prayerTimes.map((s, i) => {
-                // simple logic to highlight next prayer
-                const currentHour = currentTime.getHours();
-                const currentMinute = currentTime.getMinutes();
-                const [prayerHour, prayerMinute] = s.time.split(':').map(Number);
-                
-                const timeInMinutes = currentHour * 60 + currentMinute;
-                const prayerTimeInMinutes = prayerHour * 60 + prayerMinute;
-                const isActive = Math.abs(prayerTimeInMinutes - timeInMinutes) < 60 && prayerTimeInMinutes >= timeInMinutes;
 
-                return (
-                  <View key={i} style={[styles.sholatBubble, isActive && styles.sholatBubbleActive]}>
-                    <Text style={[styles.sholatName, isActive && styles.sholatTextActive]}>{s.name}</Text>
-                    <Text style={[styles.sholatTime, isActive && styles.sholatTextActive]}>{s.time}</Text>
-                  </View>
-                );
-              })}
+            <View style={styles.sholatBubbles}>
+              {(() => {
+                const currentMinutes = currentTime.getHours() * 60 + currentTime.getMinutes();
+                const startMinutes = prayerTimes.map((s) => {
+                  const [h, m] = s.time.split(':').map(Number);
+                  return Number.isFinite(h) && Number.isFinite(m) ? h * 60 + m : null;
+                });
+
+                return prayerTimes.map((s, i) => {
+                  const start = startMinutes[i];
+                  let isActive = false;
+                  if (start !== null) {
+                    const nextStart = i < startMinutes.length - 1 ? startMinutes[i + 1] : startMinutes[0];
+                    if (i < startMinutes.length - 1 && nextStart !== null) {
+                      // Sesi biasa: aktif dari waktu sholat ini sampai sebelum waktu sholat berikutnya
+                      // (mis. Ashar tetap "aktif" sampai menjelang Maghrib).
+                      isActive = currentMinutes >= start && currentMinutes < nextStart;
+                    } else {
+                      // Isya: aktif dari waktu Isya sampai tengah malam, lalu lanjut sampai sebelum Subuh besok.
+                      isActive = currentMinutes >= start || (nextStart !== null && currentMinutes < nextStart);
+                    }
+                  }
+
+                  return (
+                    <View key={i} style={[styles.sholatBubble, isActive && styles.sholatBubbleActive]}>
+                      <Text style={[styles.sholatName, isActive && styles.sholatTextActive]}>{s.name}</Text>
+                      <Text style={[styles.sholatTime, isActive && styles.sholatTextActive]}>{s.time}</Text>
+                    </View>
+                  );
+                });
+              })()}
             </View>
           </View>
         </View>
 
         {/* --- STATS GRID --- */}
         <View style={styles.statsGrid}>
-          <View style={styles.statCard}>
-            <Text style={styles.statLabel}>TOTAL SANTRI</Text>
-            {loading ? <ActivityIndicator color="#059669"/> : <Text style={styles.statValue}>{data.totalStudents}</Text>}
+          <View style={styles.statCardCompact}>
+            <Text style={styles.statLabel}>SANTRI</Text>
+            {loading ? <ActivityIndicator color="#059669"/> : <Text style={styles.statValueCompact}>{data.totalStudents}</Text>}
           </View>
-          <TouchableOpacity style={styles.statCard} activeOpacity={0.7} onPress={openAttendanceDetail}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-              <Text style={styles.statLabel}>HADIR HARI INI</Text>
-              <Feather name="chevron-right" size={16} color="#94A3B8" />
+
+          <TouchableOpacity style={styles.statCardCompact} activeOpacity={0.7} onPress={openAttendanceDetail}>
+            <View style={styles.statLabelRow}>
+              <Text style={styles.statLabel}>HADIR</Text>
+              <Feather name="chevron-right" size={12} color="#94A3B8" />
             </View>
-            <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 8 }}>
-              {loading ? <ActivityIndicator color="#059669"/> : (
-                <Text style={[styles.statValue, { color: '#059669' }]}>
-                  {data.presentToday}<Text style={{ fontSize: 14, fontWeight: '700', color: '#94A3B8' }}>/{data.totalStudents}</Text>
+            {loading ? <ActivityIndicator color="#059669"/> : (() => {
+              const pct = data.totalStudents > 0 ? Math.round((data.presentToday / data.totalStudents) * 100) : 0;
+              const color = data.presentToday === 0 ? '#94A3B8' : pct >= 80 ? '#059669' : pct >= 50 ? '#D97706' : '#DC2626';
+              return (
+                <Text style={[styles.statValueCompact, { color }]}>
+                  {data.presentToday}<Text style={styles.statValueCompactSub}>/{data.totalStudents}</Text>
                 </Text>
-              )}
-              {!loading && data.totalStudents > 0 && (
-                <View style={styles.statBadge}>
-                  <Text style={styles.statBadgeText}>
-                    {Math.round((data.presentToday / data.totalStudents) * 100)}%
-                  </Text>
-                </View>
-              )}
-            </View>
-            {!loading && <Text style={styles.sessionCaption}>santri hadir di min. 1 sesi</Text>}
-            {!loading && (
-              <View style={styles.sessionBreakdownRow}>
-                <View style={[styles.sessionBreakdownBox, styles.sessionBreakdownBoxPagi]}>
-                  <Text style={styles.sessionBreakdownValuePagi}>{data.presentPagi}</Text>
-                  <Text style={styles.sessionBreakdownLabelPagi}>Pagi</Text>
-                </View>
-                <View style={[styles.sessionBreakdownBox, styles.sessionBreakdownBoxSiang]}>
-                  <Text style={styles.sessionBreakdownValueSiang}>{data.presentSiang}</Text>
-                  <Text style={styles.sessionBreakdownLabelSiang}>Siang</Text>
-                </View>
-                <View style={[styles.sessionBreakdownBox, styles.sessionBreakdownBoxSore]}>
-                  <Text style={styles.sessionBreakdownValueSore}>{data.presentSore}</Text>
-                  <Text style={styles.sessionBreakdownLabelSore}>Sore</Text>
-                </View>
-              </View>
-            )}
+              );
+            })()}
           </TouchableOpacity>
-          <View style={[styles.statCard, { width: '100%' }]}>
-            <Text style={styles.statLabel}>TOTAL KELAS</Text>
-            {loading ? <ActivityIndicator color="#EA580C"/> : <Text style={[styles.statValue, { color: '#EA580C' }]}>{data.totalClasses}</Text>}
+
+          <View style={styles.statCardCompact}>
+            <Text style={styles.statLabel}>KELAS</Text>
+            {loading ? <ActivityIndicator color="#EA580C"/> : <Text style={[styles.statValueCompact, { color: '#EA580C' }]}>{data.totalClasses}</Text>}
           </View>
         </View>
 
@@ -361,49 +385,43 @@ export default function TeacherHome({ navigation }: any) {
           
           <View style={styles.quickAccessGrid}>
             <TouchableOpacity
-              style={[styles.quickCard, { backgroundColor: '#F0FDF4', borderColor: '#DCFCE7' }]}
+              style={styles.quickCard}
               onPress={() => navigation.navigate('TeacherSantriList')}
             >
-              <Feather name="users" size={24} color="#16A34A" />
-              <Text style={[styles.quickCardText, { color: '#16A34A' }]}>Santri</Text>
+              <Feather name="users" size={22} color="#16A34A" />
+              <Text style={styles.quickCardText}>Santri</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={[styles.quickCard, { backgroundColor: '#F0FDFA', borderColor: '#CCFBF1' }]}
+              style={styles.quickCard}
               onPress={() => navigation.navigate('TeacherAttendance')}
             >
-              <MaterialCommunityIcons name="line-scan" size={24} color="#0D9488" />
-              <Text style={[styles.quickCardText, { color: '#0D9488' }]}>Presensi</Text>
+              <MaterialCommunityIcons name="line-scan" size={22} color="#0D9488" />
+              <Text style={styles.quickCardText}>Presensi</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity 
-              style={[styles.quickCard, { backgroundColor: '#FAF5FF', borderColor: '#F3E8FF' }]}
+            <TouchableOpacity
+              style={styles.quickCard}
               onPress={() => navigation.navigate('TeacherInputNgaji')}
             >
-              <Feather name="book-open" size={24} color="#9333EA" />
-              <Text style={[styles.quickCardText, { color: '#9333EA' }]}>Setoran Tilawah</Text>
+              <Feather name="book-open" size={22} color="#9333EA" />
+              <Text style={styles.quickCardText}>Setoran Tilawah</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={[styles.quickCard, { backgroundColor: '#FAF5FF', borderColor: '#F3E8FF' }]}
+              style={styles.quickCard}
               onPress={() => navigation.navigate('TeacherInputHafalan')}
             >
-              <Feather name="book" size={24} color="#9333EA" />
-              <Text style={[styles.quickCardText, { color: '#9333EA' }]}>Hafalan Santri</Text>
+              <Feather name="book" size={22} color="#9333EA" />
+              <Text style={styles.quickCardText}>Hafalan Santri</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={[styles.quickCardWide, { backgroundColor: '#FFFBEB', borderColor: '#FEF3C7' }]}
+              style={styles.quickCard}
               onPress={() => navigation.navigate('TeacherInputIbadah')}
             >
-              <View style={[styles.quickCardWideIcon, { backgroundColor: '#FEF3C7' }]}>
-                <Feather name="sunrise" size={22} color="#D97706" />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.quickCardText, { color: '#D97706' }]}>Ibadah</Text>
-                <Text style={styles.quickCardWideCaption}>Catat sholat & ibadah harian santri</Text>
-              </View>
-              <Feather name="chevron-right" size={20} color="#D97706" />
+              <Feather name="sunrise" size={22} color="#D97706" />
+              <Text style={styles.quickCardText}>Ibadah</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -479,29 +497,8 @@ export default function TeacherHome({ navigation }: any) {
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate('TeacherKabar')}>
-          <Feather name="message-square" size={20} color="#64748B" />
+          <Ionicons name="megaphone-outline" size={20} color="#64748B" />
           <Text style={styles.navText}>Kabar</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity style={styles.navItem} onPress={() => {
-          CustomAlert.alert(
-            'Konfirmasi',
-            'Yakin ingin keluar dari akun?',
-            [
-              { text: 'Batal', style: 'cancel' },
-              {
-                text: 'Keluar',
-                style: 'destructive',
-                onPress: async () => {
-                  await AsyncStorage.removeItem('teacher_token');
-                  navigation.replace('DevLogin');
-                },
-              },
-            ]
-          );
-        }}>
-          <Feather name="log-out" size={20} color="#64748B" />
-          <Text style={styles.navText}>Keluar</Text>
         </TouchableOpacity>
       </View>
 
@@ -647,11 +644,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-end',
-    marginBottom: 16,
-  },
-  hijriText: {
-    color: '#D1FAE5',
-    fontSize: 12,
+    marginBottom: 4,
   },
   dateText: {
     color: '#FFFFFF',
@@ -690,6 +683,7 @@ const styles = StyleSheet.create({
   sholatBubbles: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    marginTop: 10,
   },
   sholatBubble: {
     alignItems: 'center',
@@ -717,102 +711,42 @@ const styles = StyleSheet.create({
   },
   statsGrid: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
     padding: 16,
-    gap: 12,
-    justifyContent: 'space-between',
+    gap: 10,
   },
-  statCard: {
-    width: '48%',
+  statCardCompact: {
+    flex: 1,
     backgroundColor: '#FFF',
     borderRadius: 16,
-    padding: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
     shadowRadius: 10,
     elevation: 2,
   },
+  statLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
   statLabel: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: 'bold',
     color: '#64748B',
     marginBottom: 8,
+    letterSpacing: 0.3,
   },
-  statValue: {
-    fontSize: 28,
+  statValueCompact: {
+    fontSize: 22,
     fontWeight: '900',
     color: '#0F172A',
   },
-  statBadge: {
-    backgroundColor: '#ECFDF5',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    marginBottom: 4,
-  },
-  statBadgeText: {
-    color: '#059669',
-    fontSize: 11,
-    fontWeight: 'bold',
-  },
-  sessionCaption: {
-    fontSize: 10,
+  statValueCompactSub: {
+    fontSize: 13,
+    fontWeight: '700',
     color: '#94A3B8',
-    marginTop: 2,
-  },
-  sessionBreakdownRow: {
-    flexDirection: 'row',
-    gap: 6,
-    marginTop: 8,
-  },
-  sessionBreakdownBox: {
-    flex: 1,
-    borderRadius: 8,
-    paddingVertical: 4,
-    alignItems: 'center',
-  },
-  sessionBreakdownBoxPagi: {
-    backgroundColor: '#DBEAFE',
-  },
-  sessionBreakdownBoxSiang: {
-    backgroundColor: '#FEF3C7',
-  },
-  sessionBreakdownBoxSore: {
-    backgroundColor: '#EDE9FE',
-  },
-  sessionBreakdownValuePagi: {
-    fontSize: 13,
-    fontWeight: '900',
-    color: '#1D4ED8',
-  },
-  sessionBreakdownLabelPagi: {
-    fontSize: 8,
-    fontWeight: 'bold',
-    color: '#1D4ED8',
-    textTransform: 'uppercase',
-  },
-  sessionBreakdownValueSiang: {
-    fontSize: 13,
-    fontWeight: '900',
-    color: '#B45309',
-  },
-  sessionBreakdownLabelSiang: {
-    fontSize: 8,
-    fontWeight: 'bold',
-    color: '#B45309',
-    textTransform: 'uppercase',
-  },
-  sessionBreakdownValueSore: {
-    fontSize: 13,
-    fontWeight: '900',
-    color: '#6D28D9',
-  },
-  sessionBreakdownLabelSore: {
-    fontSize: 8,
-    fontWeight: 'bold',
-    color: '#6D28D9',
-    textTransform: 'uppercase',
   },
   sectionContainer: {
     paddingHorizontal: 20,
@@ -862,8 +796,10 @@ const styles = StyleSheet.create({
   },
   quickCard: {
     width: '48%',
-    minHeight: 110,
+    minHeight: 100,
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
+    borderColor: '#E2E8F0',
     borderRadius: 16,
     padding: 16,
     alignItems: 'center',
@@ -873,27 +809,7 @@ const styles = StyleSheet.create({
   quickCardText: {
     fontSize: 13,
     fontWeight: '600',
-  },
-  quickCardWide: {
-    width: '100%',
-    borderWidth: 1,
-    borderRadius: 16,
-    padding: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  quickCardWideIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  quickCardWideCaption: {
-    fontSize: 11,
-    color: '#B45309',
-    marginTop: 2,
+    color: '#334155',
   },
   activityList: {
     backgroundColor: '#FFF',

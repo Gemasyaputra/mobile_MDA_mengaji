@@ -1,5 +1,5 @@
 ﻿import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, StatusBar, ActivityIndicator, TextInput, Platform, Modal, Image } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, StatusBar, ActivityIndicator, TextInput, Platform, Modal, Image, KeyboardAvoidingView } from 'react-native';
 import { CustomAlert } from '../components/CustomAlert';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -10,10 +10,13 @@ import { API_URL } from '../config/api';
 import { handleTeacherAuthError } from '../utils/authError';
 import { toLocalDateString } from '../utils/date';
 
+const JILID_OPTIONS = [1, 2, 3, 4, 5, 6].map((i) => `Jilid ${i}`);
+
 export default function TeacherInputNgajiScreen({ navigation }: any) {
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [upgradingLevel, setUpgradingLevel] = useState(false);
   const [teacherToken, setTeacherToken] = useState<string | null>(null);
   const [teacherId, setTeacherId] = useState<number | null>(null);
   const [classes, setClasses] = useState<any[]>([]);
@@ -24,6 +27,8 @@ export default function TeacherInputNgajiScreen({ navigation }: any) {
   const [recentRecords, setRecentRecords] = useState<any[]>([]);
   const [surahs, setSurahs] = useState<any[]>([]);
   const [surahModalVisible, setSurahModalVisible] = useState(false);
+  const [surahSearchQuery, setSurahSearchQuery] = useState('');
+  const [jilidModalVisible, setJilidModalVisible] = useState(false);
 
   // Form State
   const [date, setDate] = useState(toLocalDateString(new Date()));
@@ -181,6 +186,12 @@ export default function TeacherInputNgajiScreen({ navigation }: any) {
       CustomAlert.alert('Peringatan', 'Silakan lengkapi Jilid/Surah, Hal/Ayat Awal, dan Akhir.');
       return;
     }
+    const startNum = Number(startPoint);
+    const endNum = Number(endPoint);
+    if (Number.isFinite(startNum) && Number.isFinite(endNum) && startNum > endNum) {
+      CustomAlert.alert('Peringatan', 'Hal/Ayat Awal tidak boleh lebih besar dari Akhir.');
+      return;
+    }
     if (!teacherId) {
       CustomAlert.alert('Error', 'Sesi guru tidak valid. Silakan login ulang.');
       return;
@@ -198,7 +209,8 @@ export default function TeacherInputNgajiScreen({ navigation }: any) {
         end_point: endPoint,
         quality: quality,
         reading_status: readingStatus,
-        notes: notes
+        notes: notes,
+        token: teacherToken
       };
 
       const res = await axios.post(`${API_URL}/api/learning-records`, payload);
@@ -220,6 +232,55 @@ export default function TeacherInputNgajiScreen({ navigation }: any) {
     }
   };
 
+  const handleUpgradeLevel = async () => {
+    if (!selectedStudent || !teacherToken) return;
+    CustomAlert.alert(
+      'Konfirmasi Khatam',
+      `Apakah santri ${selectedStudent.name} telah menyelesaikan Iqro dan siap lanjut ke Al-Quran?`,
+      [
+        { text: 'Batal', style: 'cancel' },
+        {
+          text: 'Ya, Lanjut',
+          onPress: async () => {
+            try {
+              setUpgradingLevel(true);
+              const res = await axios.patch(
+                `${API_URL}/api/students/${selectedStudent.id}/upgrade?token=${encodeURIComponent(teacherToken)}`
+              );
+              if (res.data.success) {
+                setSelectedStudent((prev: any) => ({ ...prev, readingLevel: 'ALQURAN' }));
+                setStudents(prev => prev.map(s => s.id === selectedStudent.id ? { ...s, readingLevel: 'ALQURAN' } : s));
+                setType('ALQURAN');
+                setLevelOrSurah('Al-Fatihah');
+                setStartPoint('');
+                setEndPoint('');
+                CustomAlert.alert('Sukses', 'Santri berhasil dinaikkan ke Al-Quran!');
+              } else {
+                CustomAlert.alert('Gagal', 'Gagal menaikkan level santri.');
+              }
+            } catch (err) {
+              console.log('Error upgrading level', err);
+              CustomAlert.alert('Error', 'Gagal menaikkan level santri.');
+            } finally {
+              setUpgradingLevel(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const filteredSurahs = surahs.filter((surah) => {
+    const q = surahSearchQuery.trim().toLowerCase();
+    if (!q) return true;
+    return surah.name_latin.toLowerCase().includes(q) || String(surah.id).startsWith(q);
+  });
+
+  const closeSurahModal = () => {
+    setSurahModalVisible(false);
+    setSurahSearchQuery('');
+  };
+
   const getStudentTodayRecord = (id: number) => todayRecords.find(r => Number(r.student_id) === Number(id));
   const doneCount = students.filter(s => getStudentTodayRecord(s.id)).length;
 
@@ -238,8 +299,9 @@ export default function TeacherInputNgajiScreen({ navigation }: any) {
         <View style={{ width: 24 }} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+
         {step === 1 && (
           <View>
             <Text style={styles.sectionTitle}>Pilih Kelas Anda:</Text>
@@ -362,38 +424,42 @@ export default function TeacherInputNgajiScreen({ navigation }: any) {
           <View>
             <View style={styles.studentHeaderCard}>
               <Text style={styles.studentHeaderTitle}>{selectedStudent.name}</Text>
-              <Text style={styles.studentHeaderSub}>{type}</Text>
+              <Text style={styles.studentHeaderSub}>{type === 'IQRO' ? 'Iqro' : 'Al-Quran'}</Text>
               <Text style={styles.studentHeaderDate}>{formattedDate}</Text>
             </View>
 
             <View style={styles.formContainer}>
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>Jenis Bacaan</Text>
-                <View style={styles.rowBtnContainer}>
-                  <TouchableOpacity 
-                    style={[styles.radioBtn, type === 'IQRO' && styles.radioBtnActive]}
-                    onPress={() => setType('IQRO')}
-                  >
-                    <Text style={[styles.radioText, type === 'IQRO' && styles.radioTextActive]}>Iqro</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity 
-                    style={[styles.radioBtn, type === 'ALQURAN' && styles.radioBtnActive]}
-                    onPress={() => setType('ALQURAN')}
-                  >
-                    <Text style={[styles.radioText, type === 'ALQURAN' && styles.radioTextActive]}>Al-Quran</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
+              {selectedStudent.readingLevel !== 'ALQURAN' && (
+                <TouchableOpacity
+                  style={styles.upgradeCard}
+                  onPress={handleUpgradeLevel}
+                  disabled={upgradingLevel}
+                >
+                  {upgradingLevel ? (
+                    <ActivityIndicator color="#059669" style={{ alignSelf: 'center' }} />
+                  ) : (
+                    <View style={styles.upgradeCardRow}>
+                      <View style={styles.upgradeCardTextBox}>
+                        <Text style={styles.upgradeCardTitle}>🎉 Sudah khatam Iqro?</Text>
+                        <Text style={styles.upgradeCardSub}>Ketuk untuk naikkan santri ini ke Al-Quran</Text>
+                      </View>
+                      <Feather name="chevron-right" size={20} color="#B45309" />
+                    </View>
+                  )}
+                </TouchableOpacity>
+              )}
 
               <View style={styles.formGroup}>
                 <Text style={styles.label}>{type === 'IQRO' ? 'Jilid Iqro' : 'Nama Surat'}</Text>
                 {type === 'IQRO' ? (
-                  <TextInput 
-                    style={styles.input} 
-                    value={levelOrSurah}
-                    onChangeText={setLevelOrSurah}
-                    placeholder="Contoh: Jilid 4"
-                  />
+                  <TouchableOpacity
+                    style={[styles.input, { justifyContent: 'center' }]}
+                    onPress={() => setJilidModalVisible(true)}
+                  >
+                    <Text style={{ color: levelOrSurah ? '#1E293B' : '#94A3B8' }}>
+                      {levelOrSurah || 'Pilih Jilid...'}
+                    </Text>
+                  </TouchableOpacity>
                 ) : (
                   <TouchableOpacity 
                     style={[styles.input, { justifyContent: 'center' }]} 
@@ -463,7 +529,7 @@ export default function TeacherInputNgajiScreen({ navigation }: any) {
               </View>
 
               <View style={styles.formGroup}>
-                <Text style={styles.label}>Catatan (Opsional)</Text>
+                <Text style={styles.label}>Catatan</Text>
                 <TextInput 
                   style={[styles.input, styles.textArea]} 
                   value={notes}
@@ -505,33 +571,85 @@ export default function TeacherInputNgajiScreen({ navigation }: any) {
           </View>
         )}
       </ScrollView>
+      </KeyboardAvoidingView>
+
+      {/* Jilid Selection Modal */}
+      <Modal
+        visible={jilidModalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setJilidModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Pilih Jilid</Text>
+              <TouchableOpacity onPress={() => setJilidModalVisible(false)} style={{ padding: 5 }}>
+                <Feather name="x" size={24} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+            <ScrollView>
+              {JILID_OPTIONS.map((jilid) => (
+                <TouchableOpacity
+                  key={jilid}
+                  style={styles.modalItem}
+                  onPress={() => {
+                    setLevelOrSurah(jilid);
+                    setJilidModalVisible(false);
+                  }}
+                >
+                  <Text style={styles.modalItemText}>{jilid}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
 
       {/* Surah Selection Modal */}
       <Modal
         visible={surahModalVisible}
         animationType="slide"
         transparent={true}
-        onRequestClose={() => setSurahModalVisible(false)}
+        onRequestClose={closeSurahModal}
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Pilih Surat</Text>
-              <TouchableOpacity onPress={() => setSurahModalVisible(false)} style={{ padding: 5 }}>
+              <TouchableOpacity onPress={closeSurahModal} style={{ padding: 5 }}>
                 <Feather name="x" size={24} color="#64748B" />
               </TouchableOpacity>
             </View>
-            <ScrollView>
+            <View style={styles.searchInputWrapper}>
+              <Feather name="search" size={16} color="#94A3B8" />
+              <TextInput
+                style={styles.searchInput}
+                value={surahSearchQuery}
+                onChangeText={setSurahSearchQuery}
+                placeholder="Cari nama atau nomor surat..."
+                placeholderTextColor="#94A3B8"
+                autoCorrect={false}
+              />
+              {surahSearchQuery.length > 0 && (
+                <TouchableOpacity onPress={() => setSurahSearchQuery('')}>
+                  <Feather name="x-circle" size={16} color="#94A3B8" />
+                </TouchableOpacity>
+              )}
+            </View>
+            <ScrollView keyboardShouldPersistTaps="handled">
               {surahs.length === 0 ? (
                 <Text style={{ textAlign: 'center', margin: 20, color: '#94A3B8' }}>Memuat surat...</Text>
+              ) : filteredSurahs.length === 0 ? (
+                <Text style={{ textAlign: 'center', margin: 20, color: '#94A3B8' }}>Surat tidak ditemukan.</Text>
               ) : (
-                surahs.map((surah) => (
-                  <TouchableOpacity 
-                    key={surah.id} 
+                filteredSurahs.map((surah) => (
+                  <TouchableOpacity
+                    key={surah.id}
                     style={styles.modalItem}
                     onPress={() => {
                       setLevelOrSurah(surah.name_latin);
-                      setSurahModalVisible(false);
+                      closeSurahModal();
                     }}
                   >
                     <Text style={styles.modalItemText}>{surah.id}. {surah.name_latin}</Text>
@@ -572,7 +690,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: 20,
-    paddingBottom: 40,
+    paddingBottom: 280,
   },
   sectionTitle: {
     fontSize: 16,
@@ -796,6 +914,33 @@ const styles = StyleSheet.create({
     marginTop: 6,
     fontWeight: 'bold',
   },
+  upgradeCard: {
+    backgroundColor: '#FFFBEB',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 16,
+  },
+  upgradeCardRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  upgradeCardTextBox: {
+    flex: 1,
+    marginRight: 10,
+  },
+  upgradeCardTitle: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#B45309',
+  },
+  upgradeCardSub: {
+    fontSize: 12,
+    color: '#92400E',
+    marginTop: 2,
+  },
   formContainer: {
     backgroundColor: '#fff',
     padding: 15,
@@ -821,7 +966,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8FAFC',
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    borderRadius: 10,
+    borderRadius: 12,
     padding: 12,
     fontSize: 14,
     color: '#1E293B',
@@ -832,12 +977,12 @@ const styles = StyleSheet.create({
   },
   rowBtnContainer: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 10,
   },
   radioBtn: {
     flex: 1,
     padding: 12,
-    borderRadius: 10,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: '#E2E8F0',
     alignItems: 'center',
@@ -863,11 +1008,11 @@ const styles = StyleSheet.create({
     color: '#B45309',
   },
   qualityBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 10,
+    width: 48,
+    height: 48,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#CBD5E1',
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#fff',
@@ -879,7 +1024,7 @@ const styles = StyleSheet.create({
   qualityText: {
     fontSize: 14,
     fontWeight: 'bold',
-    color: '#64748B',
+    color: '#334155',
   },
   qualityTextActive: {
     color: '#fff',
@@ -963,6 +1108,23 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 18,
     fontWeight: 'bold',
+    color: '#1E293B',
+  },
+  searchInputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    marginBottom: 12,
+  },
+  searchInput: {
+    flex: 1,
+    paddingVertical: 10,
+    fontSize: 14,
     color: '#1E293B',
   },
   modalItem: {
