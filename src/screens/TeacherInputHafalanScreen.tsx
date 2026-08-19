@@ -207,7 +207,7 @@ export default function TeacherInputHafalanScreen({ navigation }: any) {
           prayer_reading_title: type === 'BACAAN_SHOLAT' ? selectedItem.title : null
         };
 
-        setTodayRecords(prev => [...prev.filter(r => r.student_id !== selectedStudent.id), localPayload]);
+        setTodayRecords(prev => [...prev, localPayload]);
         setStep(2);
         setSelectedStudent(null);
       } else {
@@ -221,8 +221,8 @@ export default function TeacherInputHafalanScreen({ navigation }: any) {
     }
   };
 
-  const getStudentTodayRecord = (id: number) => todayRecords.find(r => Number(r.student_id) === Number(id));
-  const doneCount = students.filter(s => getStudentTodayRecord(s.id)).length;
+  const getStudentTodayRecords = (id: number) => todayRecords.filter(r => Number(r.student_id) === Number(id));
+  const doneCount = students.filter(s => getStudentTodayRecords(s.id).length > 0).length;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -311,8 +311,14 @@ export default function TeacherInputHafalanScreen({ navigation }: any) {
               <Text style={styles.emptyText}>Belum ada santri di kelas ini.</Text>
             ) : (
               students.map((student, index) => {
-                const todayRec = getStudentTodayRecord(student.id);
-                const isDone = !!todayRec;
+                const todayRecs = getStudentTodayRecords(student.id);
+                const isDone = todayRecs.length > 0;
+                const doaHarian = todayRecs.filter(r => r.type === 'DOA_HARIAN');
+                const bacaanSholat = todayRecs.filter(r => r.type === 'BACAAN_SHOLAT');
+                const summaryParts = [
+                  doaHarian.length > 0 ? `Doa Harian: ${doaHarian.length}` : null,
+                  bacaanSholat.length > 0 ? `Bacaan Sholat: ${bacaanSholat.length}` : null,
+                ].filter(Boolean);
 
                 return (
                   <TouchableOpacity 
@@ -342,7 +348,7 @@ export default function TeacherInputHafalanScreen({ navigation }: any) {
                       </View>
                       
                       {isDone ? (
-                        <Text style={styles.studentSubTextDone}>{todayRec.daily_prayer_title || todayRec.prayer_reading_title} · {todayRec.is_completed ? 'Lulus' : 'Belum'} · {todayRec.quality}</Text>
+                        <Text style={styles.studentSubTextDone} numberOfLines={2}>{summaryParts.join(' · ')}</Text>
                       ) : (
                         <Text style={styles.studentSubTextPending}>
                           <Text style={{ color: '#F59E0B' }}>Belum diisi</Text>
@@ -480,24 +486,44 @@ export default function TeacherInputHafalanScreen({ navigation }: any) {
               </TouchableOpacity>
             </View>
             
-            {/* Recent Records */}
-            {recentRecords.length > 0 && (
-              <View style={styles.recentContainer}>
-                <Text style={styles.recentTitle}>Riwayat Terakhir</Text>
-                {recentRecords.map((r, i) => (
-                  <View key={i} style={styles.recentItem}>
-                    <View>
-                      <Text style={styles.recentItemText}>{r.daily_prayer_title || r.prayer_reading_title}</Text>
-                      <Text style={styles.recentItemDate}>{new Date(r.date).toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short' })}</Text>
+            {/* Recent Records: dikelompokkan per tanggal supaya beberapa setoran
+                di hari yang sama kelihatan bareng dalam satu card */}
+            {recentRecords.length > 0 && (() => {
+              const groups: { date: string; records: typeof recentRecords }[] = [];
+              recentRecords.forEach((r) => {
+                const lastGroup = groups[groups.length - 1];
+                if (lastGroup && lastGroup.date === r.date) {
+                  lastGroup.records.push(r);
+                } else {
+                  groups.push({ date: r.date, records: [r] });
+                }
+              });
+
+              return (
+                <View>
+                  <Text style={styles.recentTitle}>Riwayat Terakhir</Text>
+                  {groups.map((group) => (
+                    <View key={group.date} style={styles.recentDayCard}>
+                      <Text style={styles.recentDayDate}>
+                        {new Date(group.date).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'short' })}
+                      </Text>
+                      {group.records.map((r, i) => (
+                        <View
+                          key={r.id ?? i}
+                          style={[styles.recentItem, i === group.records.length - 1 && { borderBottomWidth: 0 }]}
+                        >
+                          <Text style={styles.recentItemText}>{r.daily_prayer_title || r.prayer_reading_title}</Text>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                            {r.is_completed ? <Feather name="check-circle" size={16} color="#10B981" /> : <Feather name="x-circle" size={16} color="#EF4444" />}
+                            <View style={styles.recentItemQuality}><Text style={styles.recentItemQualityText}>{r.quality}</Text></View>
+                          </View>
+                        </View>
+                      ))}
                     </View>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                       {r.is_completed ? <Feather name="check-circle" size={16} color="#10B981" /> : <Feather name="x-circle" size={16} color="#EF4444" />}
-                       <View style={styles.recentItemQuality}><Text style={styles.recentItemQualityText}>{r.quality}</Text></View>
-                    </View>
-                  </View>
-                ))}
-              </View>
-            )}
+                  ))}
+                </View>
+              );
+            })()}
 
           </View>
         )}
@@ -914,19 +940,26 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
   },
-  recentContainer: {
-    backgroundColor: '#fff',
-    padding: 15,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#F1F5F9',
-  },
   recentTitle: {
     fontSize: 12,
     fontWeight: 'bold',
     color: '#94A3B8',
     marginBottom: 10,
     textTransform: 'uppercase',
+  },
+  recentDayCard: {
+    backgroundColor: '#fff',
+    padding: 15,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+    marginBottom: 10,
+  },
+  recentDayDate: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#64748B',
+    marginBottom: 6,
   },
   recentItem: {
     flexDirection: 'row',
@@ -940,11 +973,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
     color: '#334155',
-  },
-  recentItemDate: {
-    fontSize: 10,
-    color: '#94A3B8',
-    marginTop: 2,
   },
   recentItemQuality: {
     backgroundColor: '#D1FAE5',

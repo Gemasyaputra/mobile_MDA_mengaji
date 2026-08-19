@@ -168,19 +168,27 @@ export default function ParentHistoryScreen({ route, navigation }: any) {
     );
   };
 
-  // Kelompokkan record SALAT_FARDU/SALAT_SUNAH per tanggal jadi satu kartu (bisa 5x/hari)
+  // Kelompokkan record SALAT_FARDU/SALAT_SUNAH per tanggal jadi satu kartu (bisa 5x/hari
+  // untuk fardu, plus berapa pun salat sunah yang tercatat hari itu).
   const buildWorshipDisplayItems = (recs: any[]) => {
     const items: any[] = [];
-    const groupsByDate: Record<string, { kind: 'salatGroup'; date: string; prayers: { name: string; recordedBy: string }[] }> = {};
+    const groupsByDate: Record<string, {
+      kind: 'salatGroup';
+      date: string;
+      prayers: { name: string; recordedBy: string }[];
+      sunahPrayers: { name: string; recordedBy: string }[];
+    }> = {};
     for (const r of recs) {
       if (r.type === 'SALAT_FARDU' || r.type === 'SALAT_SUNAH') {
         let group = groupsByDate[r.date];
         if (!group) {
-          group = { kind: 'salatGroup', date: r.date, prayers: [] };
+          group = { kind: 'salatGroup', date: r.date, prayers: [], sunahPrayers: [] };
           groupsByDate[r.date] = group;
           items.push(group);
         }
-        group.prayers.push({ name: r.prayer_name, recordedBy: r.recorded_by || 'TEACHER' });
+        const entry = { name: r.prayer_name, recordedBy: r.recorded_by || 'TEACHER' };
+        if (r.type === 'SALAT_SUNAH') group.sunahPrayers.push(entry);
+        else group.prayers.push(entry);
       } else {
         items.push({ kind: 'single', record: r });
       }
@@ -188,7 +196,10 @@ export default function ParentHistoryScreen({ route, navigation }: any) {
     return items;
   };
 
-  const renderSalatGroup = (group: { date: string; prayers: { name: string; recordedBy: string }[] }, idx: number) => {
+  const renderSalatGroup = (
+    group: { date: string; prayers: { name: string; recordedBy: string }[]; sunahPrayers: { name: string; recordedBy: string }[] },
+    idx: number
+  ) => {
     const recordedCount = group.prayers.length;
     const isComplete = recordedCount >= SALAT_FARDU_ORDER.length;
     return (
@@ -236,6 +247,21 @@ export default function ParentHistoryScreen({ route, navigation }: any) {
             );
           })}
         </View>
+        {group.sunahPrayers.length > 0 && (
+          <View style={styles.sunahWrap}>
+            {group.sunahPrayers.map((p, i) => {
+              const byParent = p.recordedBy === 'PARENT';
+              return (
+                <View key={`${p.name}-${i}`} style={[styles.sunahChip, byParent && styles.salatCellParent]}>
+                  <Ionicons name={byParent ? 'home' : 'school'} size={11} color={byParent ? '#B45309' : '#059669'} />
+                  <Text style={[styles.sunahChipText, byParent && styles.salatCellLabelParent]} numberOfLines={1}>
+                    {p.name}
+                  </Text>
+                </View>
+              );
+            })}
+          </View>
+        )}
       </View>
     );
   };
@@ -566,6 +592,31 @@ const styles = StyleSheet.create({
     height: 5,
     borderRadius: 3,
     backgroundColor: '#CBD5E1',
+  },
+  sunahWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+  },
+  sunahChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: 999,
+  },
+  sunahChipText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#065F46',
   },
   bgWarning: {
     backgroundColor: '#F59E0B',

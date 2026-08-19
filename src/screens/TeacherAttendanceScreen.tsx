@@ -1,8 +1,8 @@
 ﻿import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, StatusBar, ActivityIndicator, Platform, Modal, Image } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, FlatList, TextInput, StatusBar, ActivityIndicator, Platform, Modal, Image } from 'react-native';
 import { CustomAlert } from '../components/CustomAlert';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Feather } from '@expo/vector-icons';
+import { Feather, Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -51,6 +51,7 @@ export default function TeacherAttendanceScreen({ navigation }: any) {
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailDay, setDetailDay] = useState<any>(null);
   const [detailStudents, setDetailStudents] = useState<any[]>([]);
+  const [detailSearch, setDetailSearch] = useState('');
 
   useEffect(() => {
     loadTeacherIdAndClasses();
@@ -178,6 +179,7 @@ export default function TeacherAttendanceScreen({ navigation }: any) {
     setDetailDay(item);
     setDetailVisible(true);
     setDetailStudents([]);
+    setDetailSearch('');
     if (!teacherToken) return;
     try {
       setDetailLoading(true);
@@ -463,6 +465,10 @@ export default function TeacherAttendanceScreen({ navigation }: any) {
     </View>
   );
 
+  const filteredDetailStudents = detailStudents.filter((s) =>
+    s.name.toLowerCase().includes(detailSearch.toLowerCase())
+  );
+
   const renderDayDetailModal = () => (
     <Modal visible={detailVisible} animationType="slide" transparent onRequestClose={() => setDetailVisible(false)}>
       <View style={styles.modalOverlay}>
@@ -483,6 +489,18 @@ export default function TeacherAttendanceScreen({ navigation }: any) {
             <ActivityIndicator size="large" color="#059669" style={{ marginVertical: 30 }} />
           ) : (
             <>
+              {detailStudents.length > 0 && (
+                <View style={styles.detailSearchWrapper}>
+                  <Ionicons name="search" size={16} color="#9CA3AF" style={{ marginRight: 8 }} />
+                  <TextInput
+                    value={detailSearch}
+                    onChangeText={setDetailSearch}
+                    placeholder="Cari nama santri..."
+                    placeholderTextColor="#9CA3AF"
+                    style={styles.detailSearchInput}
+                  />
+                </View>
+              )}
               <View style={styles.detailColumnHeaderRow}>
                 <View style={{ flex: 1 }} />
                 <View style={{ flexDirection: 'row', gap: 6 }}>
@@ -491,29 +509,33 @@ export default function TeacherAttendanceScreen({ navigation }: any) {
                   ))}
                 </View>
               </View>
-              <ScrollView style={{ maxHeight: 420 }}>
-              {detailStudents.map((student) => {
-                const statuses = studentSessionStatuses(student);
-                return (
-                  <View key={student.id} style={styles.detailStudentRow}>
-                    <Text style={styles.detailStudentName} numberOfLines={1}>{student.name}</Text>
-                    <View style={{ flexDirection: 'row', gap: 6 }}>
-                      {(['PAGI', 'SIANG', 'SORE'] as const).map((name) => {
-                        const st = statuses[name];
-                        const colors = STATUS_CHIP_COLORS[st || ''] || STATUS_CHIP_COLORS.default;
-                        return (
-                          <View key={name} style={[styles.detailStatusChip, { backgroundColor: colors.bg }]}>
-                            <Text style={[styles.detailStatusChipText, { color: colors.text }]}>
-                              {st ? (STATUS_LABEL[st]?.[0] ?? st[0]) : '-'}
-                            </Text>
-                          </View>
-                        );
-                      })}
+              <FlatList
+                data={filteredDetailStudents}
+                keyExtractor={(student) => String(student.id)}
+                style={{ maxHeight: 420 }}
+                ListEmptyComponent={<Text style={styles.emptyText}>Santri tidak ditemukan.</Text>}
+                renderItem={({ item: student }) => {
+                  const statuses = studentSessionStatuses(student);
+                  return (
+                    <View style={styles.detailStudentRow}>
+                      <Text style={styles.detailStudentName} numberOfLines={1}>{student.name}</Text>
+                      <View style={{ flexDirection: 'row', gap: 6 }}>
+                        {(['PAGI', 'SIANG', 'SORE'] as const).map((name) => {
+                          const st = statuses[name];
+                          const colors = STATUS_CHIP_COLORS[st || ''] || STATUS_CHIP_COLORS.default;
+                          return (
+                            <View key={name} style={[styles.detailStatusChip, { backgroundColor: colors.bg }]}>
+                              <Text style={[styles.detailStatusChipText, { color: colors.text }]}>
+                                {st ? (STATUS_LABEL[st]?.[0] ?? st[0]) : '-'}
+                              </Text>
+                            </View>
+                          );
+                        })}
+                      </View>
                     </View>
-                  </View>
-                );
-              })}
-              </ScrollView>
+                  );
+                }}
+              />
             </>
           )}
 
@@ -1265,6 +1287,18 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     textTransform: 'uppercase',
   },
+  detailSearchWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginBottom: 12,
+  },
+  detailSearchInput: { flex: 1, fontSize: 13, color: '#1E293B', padding: 0 },
   detailStudentRow: {
     flexDirection: 'row',
     alignItems: 'center',
