@@ -6,6 +6,7 @@ import { Feather, MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { CustomAlert } from '../components/CustomAlert';
 import { API_URL } from '../config/api';
 import { ActivityItem, ICON_CONFIG, buildTeacherMessage, formatRelativeTime } from '../utils/activityFeed';
 import { handleTeacherAuthError } from '../utils/authError';
@@ -223,6 +224,24 @@ export default function TeacherHome({ navigation }: any) {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleLogout = () => {
+    CustomAlert.alert(
+      'Konfirmasi',
+      'Yakin ingin keluar dari akun?',
+      [
+        { text: 'Batal', style: 'cancel' },
+        {
+          text: 'Keluar',
+          style: 'destructive',
+          onPress: async () => {
+            await AsyncStorage.removeItem('teacher_token');
+            navigation.replace('DevLogin');
+          },
+        },
+      ]
+    );
   };
 
   const openAttendanceDetail = async () => {
@@ -499,6 +518,11 @@ export default function TeacherHome({ navigation }: any) {
         <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate('TeacherKabar')}>
           <Ionicons name="megaphone-outline" size={20} color="#64748B" />
           <Text style={styles.navText}>Kabar</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.navItem} onPress={handleLogout}>
+          <Feather name="log-out" size={20} color="#DC2626" />
+          <Text style={[styles.navText, styles.navTextLogout]}>Keluar</Text>
         </TouchableOpacity>
       </View>
 
@@ -900,6 +924,9 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: 'bold',
     color: '#10B981',
+  },
+  navTextLogout: {
+    color: '#DC2626',
   },
   modalOverlay: {
     flex: 1,
